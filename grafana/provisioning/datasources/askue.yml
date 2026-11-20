@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: ASKUE
+    uid: askue-pg
+    type: grafana-postgresql-datasource
+    url: db:5432
+    user: askue
+    isDefault: true
+    jsonData:
+      database: askue
+      sslmode: disable
+      postgresVersion: 1600
+      timezone: Asia/Krasnoyarsk
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}

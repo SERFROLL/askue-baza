@@ -1,0 +1,91 @@
+# АСКУЭ базы. Запуск на сервере: docker compose up -d --build
+# Секреты — в файле .env рядом (образец: .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: askue
+      POSTGRES_USER: askue
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD в .env}
+      TZ: Asia/Krasnoyarsk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U askue -d askue"]
+      interval: 10s
+      retries: 10
+
+  poller:
+    build: ./app
+    command: python -m askue.poller
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ASKUE_CONFIG: /config/config.yaml
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      db: {condition: service_healthy}
+
+  bot:
+    build: ./app
+    command: python -m askue.bot
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ASKUE_CONFIG: /config/config.yaml
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_IDS: ${TELEGRAM_CHAT_IDS:-}
+      TELEGRAM_PROXY: ${TELEGRAM_PROXY:-}
+      TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-}
+    volumes:
+      - ./config:/config:ro
+    depends_on:
+      db: {condition: service_healthy}
+    profiles: ["bot"]   # включается, когда задан токен: COMPOSE_PROFILES=bot в .env
+
+  grafana:
+    image: grafana/grafana-oss:11.3.1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?задайте GRAFANA_ADMIN_PASSWORD в .env}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"        # просмотр графиков без входа (только из локальной сети)
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Krasnoyarsk
+      GF_USERS_DEFAULT_LANGUAGE: ru-RU
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - grafana:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      db: {condition: service_healthy}
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      TZ: Asia/Krasnoyarsk
+    volumes:
+      - ./backups:/backups
+    entrypoint: ["/bin/sh", "-c"]
+    # раз в сутки полный дамп базы, хранится 30 дней
+    command:
+      - |
+        while true; do
+          f=/backups/askue_$$(date +%Y%m%d_%H%M).dump
+          pg_dump -h db -U askue -d askue -Fc -f "$$f" && echo "backup $$f"
+          find /backups -name 'askue_*.dump' -mtime +30 -delete
+          sleep 86400
+        done
+    depends_on:
+      db: {condition: service_healthy}
+
+volumes:
+  pgdata:
+  grafana:
