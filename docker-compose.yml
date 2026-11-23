@@ -59,6 +59,10 @@ services:
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
       GF_DATE_FORMATS_DEFAULT_TIMEZONE: Asia/Krasnoyarsk
       GF_USERS_DEFAULT_LANGUAGE: ru-RU
+      # по адресу http://<сервер>:3000 сразу открывается страница «Объекты», а не приветствие Grafana
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/askue.json
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_HELP_ENABLED: "false"
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - grafana:/var/lib/grafana
