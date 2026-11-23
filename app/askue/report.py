@@ -40,9 +40,10 @@ def energy_today(conn, cfg):
     tz = ZoneInfo(cfg["timezone"])
     midnight = dt.datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
     rows = _q(conn, """
-        SELECT point, max(e_import) - min(e_import) FROM readings
+        SELECT point, max(e_import) - min(e_import), min(ts) FROM readings
         WHERE ts >= %s GROUP BY point""", (midnight,))
-    return {r[0]: r[1] for r in rows}
+    # (кВт·ч, с какого времени есть данные) — в первый день данные начинаются не с полуночи
+    return {r[0]: (r[1], r[2].astimezone(tz)) for r in rows}, midnight
 
 
 def _fmt(x, nd=1, unit=""):
@@ -74,19 +75,34 @@ def evening_report(conn, cfg, title="Вечерний отчёт"):
     now = dt.datetime.now(tz)
     cur = current_power(conn)
     night = typical_night(conn, cfg)
-    energy = energy_today(conn, cfg)
+    energy, midnight = energy_today(conn, cfg)
     lines = ["<b>%s — %s</b>" % (title, now.strftime("%d.%m.%Y %H:%M")), cfg["site"], ""]
-    flagged = 0
+    flagged = unknown = 0
     for p in cfg["points"]:
         now_kw = cur.get(p["id"], (None, None))[0]
         icon, note = assess(p, now_kw, night.get(p["id"]), cfg["reports"])
         if icon in ("🔴", "🟠"):
             flagged += 1
-        lines.append("%s <b>%s</b>: сейчас %s, обычно ночью %s, за сегодня %s. %s" % (
+        elif icon == "⚪":
+            unknown += 1
+        kwh, since = energy.get(p["id"], (None, None))
+        if since is not None and since - midnight > dt.timedelta(minutes=15):
+            period = "с %s" % since.strftime("%H:%M")   # данные за сутки неполные
+        else:
+            period = "за сегодня"
+        lines.append("%s <b>%s</b>: сейчас %s, обычно ночью %s, %s %s. %s" % (
             icon, p["name"], _fmt(now_kw, 1, "кВт"), _fmt(night.get(p["id"]), 1, "кВт"),
-            _fmt(energy.get(p["id"]), 0, "кВт·ч"), note))
+            period, _fmt(kwh, 0, "кВт·ч"), note))
     lines.append("")
-    lines.append("Требуют проверки: %d." % flagged if flagged else "Все объекты в норме.")
+    if flagged:
+        lines.append("Требуют проверки: %d." % flagged)
+    elif unknown == len(cfg["points"]):
+        lines.append("Оценить пока нельзя: ночные пороги не заданы, а статистика ночного "
+                     "потребления накопится примерно за неделю.")
+    elif unknown:
+        lines.append("Объекты, которые можно оценить, в норме. Без оценки: %d." % unknown)
+    else:
+        lines.append("Все объекты в норме.")
     return "\n".join(lines)
 
 
