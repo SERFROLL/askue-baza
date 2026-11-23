@@ -47,7 +47,7 @@
                   "legend": {"displayMode": "list", "placement": "bottom"}, "xTickLabelRotation": -45},
       "targets": [{
         "refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT to_char(d, 'DD.MM') AS \"День\", name, kwh FROM (\n  SELECT date_trunc('day', r.ts AT TIME ZONE 'Asia/Krasnoyarsk') AS d, p.name, p.sort,\n         max(r.e_import) - min(r.e_import) AS kwh\n  FROM readings r JOIN points p ON p.id = r.point\n  WHERE $__timeFilter(r.ts)\n  GROUP BY 1, p.name, p.sort) x\nORDER BY d, sort"
+        "rawSql": "SELECT to_char(d, 'DD.MM.YYYY') AS \"День\", name, kwh FROM (\n  SELECT date_trunc('day', r.ts AT TIME ZONE 'Asia/Krasnoyarsk') AS d, p.name, p.sort,\n         max(r.e_import) - min(r.e_import) AS kwh\n  FROM readings r JOIN points p ON p.id = r.point\n  WHERE $__timeFilter(r.ts)\n  GROUP BY 1, p.name, p.sort) x\nORDER BY d, sort"
       }],
       "transformations": [{"id": "groupingToMatrix", "options": {"columnField": "name", "rowField": "День", "valueField": "kwh"}}]
     },
