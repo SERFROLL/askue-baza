@@ -64,7 +64,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Мощность объектов, слоями (сумма = вся база), кВт",
+      "title": "Мощность объектов, слоями (сумма = вся база; Склад 3 — по линиям), кВт",
       "gridPos": {
         "x": 0,
         "y": 5,
@@ -167,6 +167,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Склад 3/1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff7f7f"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3/2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9e0b14"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Сторожка"
             },
             "properties": [
@@ -217,7 +247,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT $__timeGroupAlias(m.ts, $__interval), o.name AS metric, avg(m.p) AS value\nFROM object_power_1m m JOIN objects o ON o.id = m.object_id\nWHERE $__timeFilter(m.ts) AND NOT o.is_total\nGROUP BY 1, o.name, o.sort ORDER BY 1, o.sort"
+          "rawSql": "SELECT $__timeGroupAlias(m.ts, $__interval), o.name AS metric, avg(m.p) AS value\nFROM object_power_1m m JOIN objects o ON o.id = m.object_id\nWHERE $__timeFilter(m.ts) AND NOT o.is_total AND NOT EXISTS (SELECT 1 FROM objects c WHERE c.parent = o.id)\nGROUP BY 1, o.name, o.sort ORDER BY 1, o.sort"
         }
       ]
     },
@@ -325,6 +355,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Склад 3/1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff7f7f"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3/2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9e0b14"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Сторожка"
             },
             "properties": [
@@ -375,7 +435,7 @@
           "format": "time_series",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT f.ts AS time, o.name AS metric, f.p AS value\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE $__timeFilter(f.ts) AND NOT o.is_total\nORDER BY 1"
+          "rawSql": "SELECT f.ts AS time, o.name AS metric, f.p AS value\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE $__timeFilter(f.ts) AND NOT o.is_total AND NOT EXISTS (SELECT 1 FROM objects c WHERE c.parent = o.id)\nORDER BY 1"
         }
       ]
     },
@@ -551,6 +611,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Склад 3/1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff7f7f"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3/2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9e0b14"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Сторожка"
             },
             "properties": [
@@ -598,7 +688,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT to_char(e.day, 'DD.MM.YYYY') AS \"День\", o.name, e.kwh\nFROM object_energy_day e JOIN objects o ON o.id = e.object_id\nWHERE e.day >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY e.day, o.sort"
+          "rawSql": "SELECT to_char(e.day, 'DD.MM.YYYY') AS \"День\", o.name, e.kwh\nFROM object_energy_day e JOIN objects o ON o.id = e.object_id\nWHERE e.day >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total AND NOT EXISTS (SELECT 1 FROM objects c WHERE c.parent = o.id)\nORDER BY e.day, o.sort"
         }
       ],
       "transformations": [
@@ -711,6 +801,36 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Склад 3/1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff7f7f"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3/2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9e0b14"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Сторожка"
             },
             "properties": [
@@ -758,7 +878,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "SELECT to_char(n.night, 'DD.MM.YYYY') AS \"Ночь на\", o.name, n.p_avg\nFROM object_night n JOIN objects o ON o.id = n.object_id\nWHERE n.night >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY n.night, o.sort"
+          "rawSql": "SELECT to_char(n.night, 'DD.MM.YYYY') AS \"Ночь на\", o.name, n.p_avg\nFROM object_night n JOIN objects o ON o.id = n.object_id\nWHERE n.night >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total AND NOT EXISTS (SELECT 1 FROM objects c WHERE c.parent = o.id)\nORDER BY n.night, o.sort"
         }
       ],
       "transformations": [

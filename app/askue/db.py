@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS objects (
     id text PRIMARY KEY, name text NOT NULL, sort int NOT NULL,
     night_max_kw real, is_total boolean NOT NULL DEFAULT false, n_terms int NOT NULL DEFAULT 1
 );
+ALTER TABLE objects ADD COLUMN IF NOT EXISTS parent text;
 CREATE TABLE IF NOT EXISTS object_terms (
     object_id text NOT NULL, point text NOT NULL, sign smallint NOT NULL,
     PRIMARY KEY (object_id, point)
@@ -117,9 +118,9 @@ def init(conn, cfg):
             cur.execute("DELETE FROM objects")
             for n, o in enumerate(cfg["objects"]):
                 terms = parse_terms(o)
-                cur.execute("INSERT INTO objects (id, name, sort, night_max_kw, is_total, n_terms) "
-                            "VALUES (%s, %s, %s, %s, %s, %s)",
-                            (o["id"], o["name"], n, o.get("night_max_kw"), bool(o.get("total")), len(terms)))
+                cur.execute("INSERT INTO objects (id, name, sort, night_max_kw, is_total, n_terms, parent) "
+                            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                            (o["id"], o["name"], n, o.get("night_max_kw"), bool(o.get("total")), len(terms), o.get("parent")))
                 for pid, sign in terms:
                     cur.execute("INSERT INTO object_terms (object_id, point, sign) VALUES (%s, %s, %s)",
                                 (o["id"], pid, sign))

@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 import matplotlib.dates as mdates  # noqa: E402
 import matplotlib.pyplot as plt  # noqa: E402
 
-from .config import objects as cfg_objects  # noqa: E402
+from .config import for_stack, top_objects  # noqa: E402
 
 FALLBACK = ["#1f6fd1", "#ff8c00", "#9b4dca", "#2ca02c", "#e0202a", "#a86a32", "#555555"]
 plt.rcParams.update({"font.family": "DejaVu Sans", "font.size": 10, "axes.spines.top": False,
@@ -67,7 +67,7 @@ def chart_objects(conn, cfg, minutes=180):
     """Мощность всех объектов: до 6 ч — линии (до 30 мин по 2-секундным данным, дольше по минутным
     средним), больше 6 ч — слоями по минутным средним."""
     fast = minutes <= FAST_MAX_MIN
-    objs = cfg_objects(cfg, with_total=False)
+    objs = top_objects(cfg)
     fig, ax = plt.subplots(figsize=(8, 4.6))
     t_first = None
     if minutes <= 360:
@@ -140,7 +140,8 @@ def chart_energy(cfg, objs, buckets, series, step_min, mode, title):
     else:
         bars = {o["id"]: [v - (series[o["id"]][i - 1] if i else 0.0) for i, v in enumerate(series[o["id"]])] for _, o in shown}
         width = step * 0.85
-        stack_objs = [(n, o) for n, o in shown if not (o.get("total") and len(shown) > 1)]
+        ids = {o["id"] for o in for_stack([o for _, o in shown], cfg)}
+        stack_objs = [(n, o) for n, o in shown if o["id"] in ids] or shown  # только «Вся база» — её и рисуем
         bottom = [0.0] * len(buckets)
         for n, o in stack_objs:
             vals = bars[o["id"]]

@@ -95,6 +95,13 @@ def assess(o, now_kw, night_kw, rep):
 
 
 # ---------- отчёты ----------
+def _label(o, bold=True):
+    """Имя объекта для текста; нитка склада — с отступом под своим складом."""
+    if o.get("parent"):
+        return "   ↳ " + o["name"]  # Склад 3/1 — под строкой «Склад 3»
+    return "<b>%s</b>" % o["name"] if bold else o["name"]
+
+
 def _head(cfg, title):
     now = dt.datetime.now(ZoneInfo(cfg["timezone"]))
     return ["<b>%s — %s</b>" % (title, now.strftime("%d.%m.%Y %H:%M")), cfg["site"], ""]
@@ -115,8 +122,8 @@ def evening_report(conn, cfg, title="Вечерний отчёт", full=True):
         icon, note = assess(o, now_kw, night.get(o["id"]), cfg["reports"])
         kwh, since = energy.get(o["id"], (None, None))
         period = "с %s" % since.astimezone(tz).strftime("%H:%M") if since and since - midnight > dt.timedelta(minutes=15) else "за сегодня"
-        line = "%s <b>%s</b>: сейчас %s, обычно ночью %s, %s %s. %s" % (
-            icon, o["name"], _fmt(now_kw, 1, "кВт"), _fmt(night.get(o["id"]), 1, "кВт"), period, _fmt(kwh, 0, "кВт·ч"), note)
+        line = "%s %s: сейчас %s, обычно ночью %s, %s %s. %s" % (
+            icon, _label(o), _fmt(now_kw, 1, "кВт"), _fmt(night.get(o["id"]), 1, "кВт"), period, _fmt(kwh, 0, "кВт·ч"), note)
         if icon in ("🔴", "🟠"):
             flagged.append(line)
         elif icon == "⚪":
@@ -162,7 +169,7 @@ def now_report(conn, cfg):
             lines.append("<code>%s</code>" % spark.get(o["id"], ""))
             continue
         icon, _ = assess(o, kw, night.get(o["id"]), cfg["reports"])
-        lines.append("%s <b>%s</b>: %s" % (icon, o["name"], _fmt(kw, 1, "кВт")))
+        lines.append("%s %s: %s" % (icon, _label(o), _fmt(kw, 1, "кВт")))
         lines.append("<code>%s</code>" % spark.get(o["id"], ""))
     newest = max([v[1] for v in cur.values() if v[1]], default=None)
     lines.append("")
@@ -189,7 +196,7 @@ def morning_report(conn, cfg):
             med = statistics.median(prev)
             if med > 0.5:
                 cmp = " (обычно %s, %+.0f%%)" % (_fmt(med, 0, "кВт·ч"), (d[y] - med) / med * 100)
-        name = "<b>%s</b>" % o["name"] if o.get("total") else o["name"]
+        name = "<b>%s</b>" % o["name"] if o.get("total") else _label(o, bold=False)
         lines.append("%s: %s%s" % (name, _fmt(d.get(y), 0, "кВт·ч"), cmp))
     lines.append("")
     lines.append(period_energy_text(conn, cfg, month_start(cfg), None, "С начала месяца"))

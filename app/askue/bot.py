@@ -21,7 +21,7 @@ import requests
 
 from . import config as config_mod
 from . import db, report
-from .dialog import Dialog, View, home_kb
+from .dialog import Dialog, View, home_kb, info_text
 
 log = logging.getLogger("bot")
 
@@ -201,7 +201,10 @@ class Bot:
         d.conn = c
         view = d.custom_period(chat_id, raw) if admin else None
         if view is None:
-            if text in ("/start", "/menu", "меню"):
+            if text == "/start":
+                self.pin_info(chat_id)
+                view = d.menu(admin)
+            elif text in ("/menu", "меню"):
                 view = d.menu(admin)
             elif text in ("/power", "мощность"):
                 view = d.handle(c, chat_id, "P:0", admin)
@@ -216,6 +219,27 @@ class Bot:
             elif text in ("/help", "help", "помощь"):
                 view = View("text", HELP, kb=home_kb())
         self.render(chat_id, view)
+
+    def pin_info(self, chat_id):
+        """Справка о системе со ссылкой на панель — отправить и закрепить вверху чата."""
+        try:
+            m = self.tg.send(chat_id, info_text(self.cfg))
+            self.tg.call("pinChatMessage", chat_id=chat_id, message_id=m["message_id"], disable_notification=True)
+        except Exception as e:  # noqa: BLE001 — в группе у бота может не быть права закреплять
+            log.warning("не удалось закрепить справку в %s: %s", chat_id, e)
+
+    def set_profile_texts(self):
+        url = self.cfg.get("dashboard_url", "")
+        try:
+            self.tg.call("setMyShortDescription", short_description=(
+                "Электроучёт базы, Кардачинская 28. Полная панель (локальная сеть): %s" % url)[:120])
+            self.tg.call("setMyDescription", description=(
+                "АСКУЭ базы ООО «РегионСтройСистемы», ул. Кардачинская, 28. Мощность и расход электроэнергии "
+                "по объектам: Склад 1, Склад 2, Склад 3 (3/1 и 3/2), Офис, К11, Сторожка.\n\n"
+                "Полная панель отчётности доступна только в локальной сети базы и офиса: %s\n\n"
+                "Нажмите «Старт», затем «Меню»." % url)[:512])
+        except Exception as e:  # noqa: BLE001
+            log.warning("описание бота: %s", e)
 
     # ----- расписание -----
     def scheduled(self):
@@ -279,6 +303,7 @@ class Bot:
         me = self.tg.call("getMe")
         log.info("бот @%s запущен: админов %d, охраны %d, открытый доступ: %s", me.get("username"),
                  len(self.admins), len(self.guards), "да" if self.open else "нет")
+        self.set_profile_texts()
         try:
             self.tg.call("setMyCommands", commands=[
                 {"command": "menu", "description": "Меню"},

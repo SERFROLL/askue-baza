@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
 
 from . import charts, query, report
+from . import config as config_mod
 from .report import _fmt
 
 POWER_PERIODS = [("now", "Сейчас"), ("15", "15 мин"), ("180", "3 ч"), ("720", "12 ч"), ("1440", "24 ч")]
@@ -42,8 +43,29 @@ def btn(text, data):
 
 def menu_kb(admin):
     rows = [[btn("⚡ Мощность", "P:0"), btn("🔋 Энергия", "E:0")] if admin else [btn("⚡ Мощность", "P:0")],
-            [btn("🟢 Сводка сейчас", "S")] + ([btn("🔌 Связь", "C")] if admin else [])]
+            [btn("🟢 Сводка сейчас", "S")] + ([btn("🔌 Связь", "C")] if admin else []),
+            [btn("ℹ️ О системе", "I")]]
     return {"inline_keyboard": rows}
+
+
+def info_text(cfg):
+    """Краткая справка о системе — закрепляется в чате и показывается по кнопке «О системе»."""
+    url = cfg.get("dashboard_url", "")
+    names = []
+    for o in cfg["objects"]:
+        if o.get("total") or o.get("parent"):
+            continue
+        kids = [k["name"] for k in cfg["objects"] if k.get("parent") == o["id"]]
+        names.append("%s (%s)" % (o["name"], ", ".join(kids)) if kids else o["name"])
+    return ("<b>ℹ️ АСКУЭ базы — %s</b>\n"
+            "Электроучёт: мощность и расход энергии по объектам — %s.\n\n"
+            "📊 <b>Полная панель отчётности</b>: %s\n"
+            "Открывается только из локальной сети базы и офиса: графики, история, ночное потребление, "
+            "сверка с энергосбытом.\n\n"
+            "🤖 <b>В боте</b>: «🏠 Меню» или /menu → ⚡ Мощность или 🔋 Энергия → объект → период.\n"
+            "Мощность обновляется каждые 2 с. Вечерний отчёт — %s, утренняя сводка — %s."
+            % (cfg["site"].split(", ", 1)[-1], ", ".join(names), url,
+               cfg["reports"]["evening_time"], cfg["reports"].get("morning_time", "08:00")))
 
 
 def home_kb():
@@ -54,7 +76,8 @@ class Dialog:
     def __init__(self, cfg):
         self.cfg = cfg
         self.objs = cfg["objects"]
-        self.all_mask = sum(1 << i for i, o in enumerate(self.objs) if not o.get("total"))
+        # «Все объекты» — верхний уровень без итога (нитки складов выбираются отдельно)
+        self.all_mask = sum(1 << i for i, o in enumerate(self.objs) if not o.get("total") and not o.get("parent"))
         self.pending = {}  # chat_id -> mask: ждём текст «свой период» для энергии
 
     # ---------- общее ----------
@@ -67,7 +90,7 @@ class Dialog:
     def pick(self, k, mask, title):
         rows, row = [], []
         for i, o in enumerate(self.objs):
-            row.append(btn(("✅ " if mask >> i & 1 else "") + o["name"], "%st:%d:%d" % (k, mask, i)))
+            row.append(btn(("✅ " if mask >> i & 1 else "") + o.get("short", o["name"]), "%st:%d:%d" % (k, mask, i)))
             if len(row) == 3:
                 rows.append(row)
                 row = []
@@ -146,7 +169,7 @@ class Dialog:
                      "Данные с %s по %s" % (t0.astimezone(tz).strftime("%d.%m %H:%M"), t1.astimezone(tz).strftime("%d.%m %H:%M")), ""]
             for o in objs:
                 lines.append(("<b>%s</b>: %s" if o.get("total") else "%s: %s") % (o["name"], _fmt(tot.get(o["id"]), 1, "кВт·ч")))
-            parts = [o for o in objs if not o.get("total") and o["id"] in tot]
+            parts = [o for o in config_mod.for_stack(objs, self.cfg) if o["id"] in tot]  # без двойного счёта ниток
             if len(parts) > 1:
                 lines.append("Сумма выбранных: %s" % _fmt(sum(tot[o["id"]] for o in parts), 1, "кВт·ч"))
             lines.append("")
@@ -203,6 +226,8 @@ class Dialog:
             return self.menu(admin)
         if k == "S":
             return View("text", report.now_report(conn, self.cfg), kb=home_kb())
+        if k == "I":
+            return View("text", info_text(self.cfg), kb=home_kb())
         if k == "C" and admin:
             return View("text", report.status_report(conn, self.cfg), kb=home_kb())
         if k[0] == "E" and not admin:

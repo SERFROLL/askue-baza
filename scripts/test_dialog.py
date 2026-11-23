@@ -11,13 +11,16 @@ d = Dialog(cfg)
 ALL = d.all_mask
 one = 1 << 3          # Склад 2
 two = (1 << 0) | (1 << 3)
-tot = 1 << 6
+ids = [o["id"] for o in cfg["objects"]]
+tot = 1 << ids.index("total")
+sub = (1 << ids.index("sklad3")) | (1 << ids.index("sklad3_1")) | (1 << ids.index("sklad3_2"))
 codes = ["m", "S", "C", "P:0", "Pt:0:3", "Pa:0", "Pd:%d" % one,
          "Pp:%d:now" % one, "Pp:%d:now" % ALL, "Pp:%d:15" % one, "Pp:%d:180" % one, "Pp:%d:720" % two, "Pp:%d:1440" % ALL,
          "E:0", "Ed:%d" % two, "Ep:%d:today" % two, "Ep:%d:today" % (ALL | tot), "Ep:%d:yday" % one, "Ep:%d:mon" % tot,
          "Ep:%d:pmon" % one, "Ep:%d:cust" % one,
          "Ev:%d:today:c" % (ALL | tot), "Ev:%d:today:b" % (ALL | tot), "Ev:%d:7d:b" % two, "Ev:%d:mon:c" % one,
-         "chart:3", "now", "energy"]
+         "chart:3", "now", "energy", "I",
+         "Pp:%d:now" % sub, "Pp:%d:180" % sub, "Ep:%d:today" % sub, "Ev:%d:today:b" % (sub | ALL | tot), "Ev:%d:today:c" % sub]
 bad = 0
 for c in codes:
     t0 = time.time()

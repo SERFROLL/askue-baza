@@ -34,6 +34,8 @@ def load(path=None):
         for pid, _ in parse_terms(o):
             if pid not in ids:
                 raise ValueError("объект %s: нет точки %s" % (o["id"], pid))
+        if o.get("parent") and o["parent"] not in oids:
+            raise ValueError("объект %s: нет родителя %s" % (o["id"], o["parent"]))
     if not re.match(r"^[A-Za-z_/+-]+$", cfg["timezone"]):
         raise ValueError("странное имя часового пояса")
     return cfg
@@ -41,6 +43,23 @@ def load(path=None):
 
 def objects(cfg, with_total=True):
     return [o for o in cfg["objects"] if with_total or not o.get("total")]
+
+
+def top_objects(cfg):
+    """Объекты верхнего уровня без итога (Склад 1 ... Сторожка) — их сумма равна всей базе."""
+    return [o for o in cfg["objects"] if not o.get("total") and not o.get("parent")]
+
+
+def parents(cfg):
+    return {o["parent"] for o in cfg["objects"] if o.get("parent")}
+
+
+def for_stack(objs, cfg):
+    """Объекты для графиков «слоями»/столбиков без двойного счёта: без итога, а если выбраны родитель
+    и его нитки — родитель заменяется нитками."""
+    sel = {o["id"] for o in objs}
+    kids = {o["parent"] for o in cfg["objects"] if o.get("parent") and o["id"] in sel}
+    return [o for o in objs if not o.get("total") and o["id"] not in kids]
 
 
 def db_dsn():

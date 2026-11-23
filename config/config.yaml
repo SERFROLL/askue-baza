@@ -2,6 +2,7 @@
 # Секреты (пароли, токен бота) сюда НЕ писать — они в .env на сервере.
 
 site: "База ООО «РегионСтройСистемы», ул. Кардачинская, 28"
+dashboard_url: "http://192.168.107.10:3000"   # полная панель Grafana — открывается только из сети базы и офиса
 timezone: "Asia/Krasnoyarsk"
 
 # Опрос. Замер 23.11.2026: один запрос мощности через шлюз — 44 мс, мощность по 5 каналам ША1 — 0,22 с,
@@ -24,8 +25,8 @@ points:
   - {id: "M1.3", name: "M1 к.3 — К11",                  gateway: GW1, unit: 11, channel: 3}
   - {id: "M1.4", name: "M1 к.4 — линия на ВРУ С2 + С3", gateway: GW1, unit: 11, channel: 4}
   - {id: "M2",   name: "M2 — Сторожка",                 gateway: GW1, unit: 12, channel: 1}
-  - {id: "M3",   name: "M3 — Склад 3, линия 1",         gateway: GW2, unit: 21, channel: 1}
-  - {id: "M4",   name: "M4 — Склад 3, линия 2",         gateway: GW2, unit: 22, channel: 1}
+  - {id: "M3",   name: "M3 — Склад 3/1",         gateway: GW2, unit: 21, channel: 1}
+  - {id: "M4",   name: "M4 — Склад 3/2",         gateway: GW2, unit: 22, channel: 1}
 
 # Объекты — то, за чем следят люди. terms: какие точки складывать (+) и вычитать (−).
 # Склад 2 считается: линия на ВРУ «Склад 2 + Склад 3» минус Склад 3 (M3 + M4).
@@ -33,6 +34,9 @@ points:
 # night_max_kw — сколько объект может потреблять в нерабочее время, кВт (null — порог не задан,
 #   тогда объект сравнивается со своим обычным ночным потреблением за прошлые дни).
 # color — цвет объекта на всех графиках (подобраны максимально различимые).
+# parent — объект входит в другой (нитка учёта внутри склада, имя через дробь: Склад 3/1, Склад 3/2). На графиках «слоями» и в столбиках вместо
+#   родителя рисуются его нитки, чтобы не было двойного счёта; «Все объекты» выбирает объекты верхнего уровня.
+# short — короткое имя для кнопок бота.
 # total: true — итог по базе, в проверке «не выключен» не участвует.
 objects:
   - {id: sklad1,    name: "Склад 1",  color: "#1f6fd1", terms: ["+M1.1"],               night_max_kw: null}
@@ -40,6 +44,8 @@ objects:
   - {id: k11,       name: "К11",      color: "#9b4dca", terms: ["+M1.3"],               night_max_kw: null}
   - {id: sklad2,    name: "Склад 2",  color: "#2ca02c", terms: ["+M1.4", "-M3", "-M4"], night_max_kw: null}
   - {id: sklad3,    name: "Склад 3",  color: "#e0202a", terms: ["+M3", "+M4"],          night_max_kw: null}
+  - {id: sklad3_1,  name: "Склад 3/1", short: "Склад 3/1", parent: sklad3, color: "#ff7f7f", terms: ["+M3"], night_max_kw: null}
+  - {id: sklad3_2,  name: "Склад 3/2", short: "Склад 3/2", parent: sklad3, color: "#9e0b14", terms: ["+M4"], night_max_kw: null}
   - {id: storozhka, name: "Сторожка", color: "#a86a32", terms: ["+M2"],                 night_max_kw: null}
   - {id: total,     name: "Вся база", color: "#555555", terms: ["+M1.1", "+M1.2", "+M1.3", "+M1.4", "+M2"], total: true}
 
