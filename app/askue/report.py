@@ -124,7 +124,10 @@ def evening_report(conn, cfg, title="Вечерний отчёт", full=True):
         if full:
             lines.append(line)
     if not full:
-        lines += flagged
+        if flagged:
+            lines += flagged
+        else:
+            lines.pop()  # без пустой строки перед итогом
     if full:
         tot = [o for o in cfg["objects"] if o.get("total")]
         for o in tot:
