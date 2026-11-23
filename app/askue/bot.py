@@ -230,6 +230,15 @@ class Bot:
         except Exception as e:  # noqa: BLE001 — в группе у бота может не быть права закреплять
             log.warning("не удалось закрепить справку в %s: %s", chat_id, e)
 
+    def object_names(self):
+        out = []
+        for o in self.cfg["objects"]:
+            if o.get("total") or o.get("parent"):
+                continue
+            kids = [k["name"].split()[-1] for k in self.cfg["objects"] if k.get("parent") == o["id"]]
+            out.append("%s (%s)" % (o["name"], " и ".join(kids)) if kids else o["name"])
+        return ", ".join(out)
+
     def set_profile_texts(self):
         url = self.cfg.get("dashboard_url", "")
         try:
@@ -237,9 +246,9 @@ class Bot:
                 "Электроучёт базы, Кардачинская 28. Полная панель (локальная сеть): %s" % url)[:120])
             self.tg.call("setMyDescription", description=(
                 "АСКУЭ базы ООО «РегионСтройСистемы», ул. Кардачинская, 28. Мощность и расход электроэнергии "
-                "по объектам: Склад 1, Склад 2, Склад 3 (3/1 и 3/2), Офис, К11, Сторожка.\n\n"
+                "по объектам: %s.\n\n"
                 "Полная панель отчётности доступна только в локальной сети базы и офиса: %s\n\n"
-                "Нажмите «Старт», затем «Меню»." % url)[:512])
+                "Нажмите «Старт», затем «Меню»." % (self.object_names(), url))[:512])
         except Exception as e:  # noqa: BLE001
             log.warning("описание бота: %s", e)
 

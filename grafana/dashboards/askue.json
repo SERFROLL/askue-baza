@@ -197,7 +197,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Сторожка"
+              "options": "Сторожка + компрессор"
             },
             "properties": [
               {
@@ -385,7 +385,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Сторожка"
+              "options": "Сторожка + компрессор"
             },
             "properties": [
               {
@@ -641,7 +641,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Сторожка"
+              "options": "Сторожка + компрессор"
             },
             "properties": [
               {
@@ -831,7 +831,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Сторожка"
+              "options": "Сторожка + компрессор"
             },
             "properties": [
               {

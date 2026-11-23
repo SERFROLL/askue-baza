@@ -46,7 +46,7 @@ def objects(cfg, with_total=True):
 
 
 def top_objects(cfg):
-    """Объекты верхнего уровня без итога (Склад 1 ... Сторожка) — их сумма равна всей базе."""
+    """Объекты верхнего уровня без итога (Склад 1 ... Сторожка + компрессор) — их сумма равна всей базе."""
     return [o for o in cfg["objects"] if not o.get("total") and not o.get("parent")]
 
 
