@@ -2,12 +2,12 @@
 
 Переменные окружения:
   TELEGRAM_BOT_TOKEN   токен от @BotFather (обязательно)
-  TELEGRAM_CHAT_IDS    id чатов администраторов через запятую: полные отчёты, утренняя сводка, техника
-  TELEGRAM_GUARD_IDS   id чатов охраны через запятую: вечером только «не выключенные», ночные предупреждения
+  TELEGRAM_CHAT_IDS    id чатов администраторов через запятую: всё, включая энергию, утреннюю сводку и технику
+  TELEGRAM_GUARD_IDS   id чатов охраны через запятую: мощность, сводка, вечером только «не выключенные»
   TELEGRAM_PROXY       необязательно: прокси для api.telegram.org
   TELEGRAM_API_BASE    необязательно: свой адрес-ретранслятор вместо https://api.telegram.org
 
-Кнопки под сообщениями: «Сейчас», «График 3 ч», «Сутки», «По объекту», «Расход» (админы), «Связь» (админы).
+Диалог (меню → объект(ы) → период → ответ с кнопками уточнения) — в dialog.py.
 Бот пишет в журнал id каждого чата, который ему пишет, — так подключаются новые чаты.
 """
 import datetime as dt
@@ -19,16 +19,17 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-from . import charts, report
 from . import config as config_mod
-from . import db
+from . import db, report
+from .dialog import Dialog, View, home_kb
 
 log = logging.getLogger("bot")
 
-HELP = ("Кнопки под сообщениями:\n«Сейчас» — мощность объектов и тренд за 2 часа\n"
-        "«15 мин» — график мгновенной мощности (каждые 2 с)\n«3 ч», «Сутки» — график по минутным средним\n"
-        "«По объекту» — график одного объекта за сутки\n«Расход» — энергия за месяц для сверки с энергосбытом\n"
-        "«Связь» — состояние счётчиков\n\nКоманды: /now, /report, /chart, /energy, /status, /id")
+HELP = ("<b>Как пользоваться</b>\nНажмите «🏠 Меню» или напишите /menu.\n"
+        "⚡ Мощность — выберите объект(ы) и период: сейчас, 15 мин, 3 ч, 12 ч, 24 ч.\n"
+        "🔋 Энергия — объект(ы) и период; ответ числом, затем можно открыть график нарастающим итогом "
+        "или по часам/дням. «Свой период» — напишите даты, например 01.11–15.11.\n"
+        "🟢 Сводка сейчас — все объекты одним сообщением.\n\nКоманды: /menu, /power, /energy, /now, /report, /status, /id")
 
 
 class Telegram:
@@ -50,12 +51,22 @@ class Telegram:
             raise RuntimeError("Telegram %s: %s" % (method, data.get("description")))
         return data["result"]
 
+    def _multipart(self, method, data, png):
+        r = requests.post(self._url(method), data=data, files={"photo": ("chart.png", png, "image/png")},
+                          timeout=60, proxies=self.proxies)
+        res = r.json()
+        if not res.get("ok"):
+            raise RuntimeError("Telegram %s: %s" % (method, res.get("description")))
+        return res["result"]
+
     def send(self, chat_id, text, keyboard=None):
         parts = [text[i:i + 4000] for i in range(0, len(text), 4000)] or [""]
+        msg = None
         for n, part in enumerate(parts):
             last = n == len(parts) - 1
-            self.call("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True,
-                      reply_markup=keyboard if last and keyboard else None)
+            msg = self.call("sendMessage", chat_id=chat_id, text=part, parse_mode="HTML", disable_web_page_preview=True,
+                            reply_markup=keyboard if last and keyboard else None)
+        return msg
 
     def photo(self, chat_id, png, caption=None, keyboard=None):
         data = {"chat_id": chat_id}
@@ -63,24 +74,26 @@ class Telegram:
             data["caption"] = caption
         if keyboard:
             data["reply_markup"] = json.dumps(keyboard)
-        r = requests.post(self._url("sendPhoto"), data=data, files={"photo": ("chart.png", png, "image/png")},
-                          timeout=60, proxies=self.proxies)
-        if not r.json().get("ok"):
-            raise RuntimeError("Telegram sendPhoto: %s" % r.json().get("description"))
+        return self._multipart("sendPhoto", data, png)
 
+    def edit_text(self, chat_id, msg_id, text, keyboard=None):
+        return self.call("editMessageText", chat_id=chat_id, message_id=msg_id, text=text[:4000], parse_mode="HTML",
+                         disable_web_page_preview=True, reply_markup=keyboard)
 
-def keyboard(admin):
-    rows = [[{"text": "Сейчас", "callback_data": "now"}, {"text": "15 мин", "callback_data": "chart:15"},
-             {"text": "3 ч", "callback_data": "chart:180"}, {"text": "Сутки", "callback_data": "chart:1440"}],
-            [{"text": "По объекту", "callback_data": "objs"}]]
-    if admin:
-        rows[1] += [{"text": "Расход", "callback_data": "energy"}, {"text": "Связь", "callback_data": "status"}]
-    return {"inline_keyboard": rows}
+    def edit_photo(self, chat_id, msg_id, png, caption=None, keyboard=None):
+        media = {"type": "photo", "media": "attach://photo"}
+        if caption:
+            media["caption"] = caption
+        data = {"chat_id": chat_id, "message_id": msg_id, "media": json.dumps(media)}
+        if keyboard:
+            data["reply_markup"] = json.dumps(keyboard)
+        return self._multipart("editMessageMedia", data, png)
 
-
-def objects_keyboard(cfg):
-    btns = [{"text": o["name"], "callback_data": "obj:" + o["id"]} for o in cfg["objects"]]
-    return {"inline_keyboard": [btns[i:i + 3] for i in range(0, len(btns), 3)]}
+    def delete(self, chat_id, msg_id):
+        try:
+            self.call("deleteMessage", chat_id=chat_id, message_id=msg_id)
+        except Exception:  # noqa: BLE001 — старое сообщение могло уже исчезнуть
+            pass
 
 
 def _ids(var):
@@ -114,6 +127,7 @@ class Bot:
         self.admins = _ids("TELEGRAM_CHAT_IDS")
         self.guards = _ids("TELEGRAM_GUARD_IDS")
         self.conn = db.connect()
+        self.dialog = Dialog(cfg)
         self.alert_sent = {}
 
     def broadcast(self, text, to, kb=None):
@@ -123,49 +137,48 @@ class Bot:
             except Exception as e:  # noqa: BLE001 — один недоступный чат не должен ронять бота
                 log.error("не удалось отправить в %s: %s", c, e)
 
-    # ----- действия -----
-    def act(self, chat_id, action):
-        admin = str(chat_id) in self.admins
-        c, cfg = self.conn, self.cfg
-        if action in ("now", "/now", "/start", "сейчас"):
-            self.tg.send(chat_id, report.now_report(c, cfg), keyboard(admin))
-        elif action in ("report", "/report", "отчёт", "отчет"):
-            self.tg.send(chat_id, report.evening_report(c, cfg, title="Отчёт по запросу"), keyboard(admin))
-        elif action.startswith("chart:") or action == "/chart":
-            minutes = int(action.split(":")[1]) if ":" in action else 180
-            minutes = max(5, min(minutes, 7 * 1440))
-            self.tg.photo(chat_id, charts.chart_objects(c, cfg, minutes), keyboard=keyboard(admin))
-        elif action == "objs":
-            self.tg.send(chat_id, "Выберите объект:", objects_keyboard(cfg))
-        elif action.startswith("obj:"):
-            oid = action[4:]
-            if any(o["id"] == oid for o in cfg["objects"]):
-                night = report.typical_night(c, cfg).get(oid)
-                self.tg.photo(chat_id, charts.chart_object(c, cfg, oid, 1440, night), keyboard=keyboard(admin))
-        elif action in ("energy", "/energy") and admin:
-            self.tg.send(chat_id, report.energy_report(c, cfg), keyboard(admin))
-        elif action in ("status", "/status") and admin:
-            self.tg.send(chat_id, report.status_report(c, cfg), keyboard(admin))
-        elif action in ("/help", "help"):
-            self.tg.send(chat_id, HELP, keyboard(admin))
+    def render(self, chat_id, view, msg=None):
+        """Показать экран: править текущее сообщение, если тип совпадает, иначе заменить новым."""
+        if view is None:
+            return
+        cur_kind = None if msg is None else ("photo" if msg.get("photo") else "text")
+        try:
+            if cur_kind == view.kind == "text":
+                return self.tg.edit_text(chat_id, msg["message_id"], view.text, view.kb)
+            if cur_kind == view.kind == "photo":
+                return self.tg.edit_photo(chat_id, msg["message_id"], view.png, view.text, view.kb)
+        except RuntimeError as e:
+            if "message is not modified" in str(e):
+                return None
+            log.warning("правка не удалась (%s), шлю новое сообщение", e)
+        if msg is not None:
+            self.tg.delete(chat_id, msg["message_id"])
+        if view.kind == "photo":
+            return self.tg.photo(chat_id, view.png, view.text, view.kb)
+        return self.tg.send(chat_id, view.text, view.kb)
 
+    # ----- входящие -----
     def handle(self, upd):
         if "callback_query" in upd:
             cq = upd["callback_query"]
-            chat = cq["message"]["chat"]
+            msg = cq["message"]
+            chat_id = msg["chat"]["id"]
+            if str(chat_id) not in self.admins + self.guards:
+                return
             try:
                 self.tg.call("answerCallbackQuery", callback_query_id=cq["id"])
             except Exception:  # noqa: BLE001
                 pass
-            if str(chat["id"]) in self.admins + self.guards:
-                self.act(chat["id"], cq.get("data", ""))
+            admin = str(chat_id) in self.admins
+            self.render(chat_id, self.dialog.handle(self.conn, chat_id, cq.get("data", ""), admin), msg)
             return
         msg = upd.get("message") or upd.get("channel_post")
         if not msg or "text" not in msg:
             return
         chat = msg["chat"]
         chat_id = chat["id"]
-        text = msg["text"].strip().lower().split("@")[0]
+        raw = msg["text"].strip()
+        text = raw.lower().split("@")[0]
         log.info("сообщение из чата id=%s (%s %s): %s", chat_id, chat.get("type"),
                  chat.get("title") or chat.get("username") or chat.get("first_name") or "", text[:40])
         if text in ("/id", "id"):
@@ -175,7 +188,26 @@ class Bot:
             if text == "/start":
                 self.tg.send(chat_id, "Бот АСКУЭ базы. Этот чат пока не подключён. id чата: <code>%s</code>" % chat_id)
             return
-        self.act(chat_id, text)
+        admin = str(chat_id) in self.admins
+        d, c = self.dialog, self.conn
+        d.conn = c
+        view = d.custom_period(chat_id, raw) if admin else None
+        if view is None:
+            if text in ("/start", "/menu", "меню"):
+                view = d.menu(admin)
+            elif text in ("/power", "мощность"):
+                view = d.handle(c, chat_id, "P:0", admin)
+            elif text in ("/energy", "энергия") and admin:
+                view = d.handle(c, chat_id, "E:0", admin)
+            elif text in ("/now", "сейчас"):
+                view = d.handle(c, chat_id, "S", admin)
+            elif text in ("/report", "отчёт", "отчет"):
+                view = View("text", report.evening_report(c, self.cfg, title="Отчёт по запросу", full=admin), kb=home_kb())
+            elif text == "/status" and admin:
+                view = d.handle(c, chat_id, "C", admin)
+            elif text in ("/help", "help", "помощь"):
+                view = View("text", HELP, kb=home_kb())
+        self.render(chat_id, view)
 
     # ----- расписание -----
     def scheduled(self):
@@ -186,12 +218,12 @@ class Bot:
         evening = dt.time.fromisoformat(cfg["reports"]["evening_time"])
         morning = dt.time.fromisoformat(cfg["reports"].get("morning_time", "08:00"))
         if now.time() >= evening and _state_get(c, "evening_sent") != today:
-            self.broadcast(report.evening_report(c, cfg), self.admins, keyboard(True))
+            self.broadcast(report.evening_report(c, cfg), self.admins, home_kb())
             if self.guards:
-                self.broadcast(report.evening_report(c, cfg, full=False), self.guards, keyboard(False))
+                self.broadcast(report.evening_report(c, cfg, full=False), self.guards, home_kb())
             _state_set(c, "evening_sent", today)
         if now.time() >= morning and _state_get(c, "morning_sent") != today:
-            self.broadcast(report.morning_report(c, cfg), self.admins, keyboard(True))
+            self.broadcast(report.morning_report(c, cfg), self.admins, home_kb())
             _state_set(c, "morning_sent", today)
         self.alerts(now)
 
@@ -232,7 +264,7 @@ class Bot:
             last = self.alert_sent.get(o["id"])
             if last is None or time.time() - last > al["repeat_min"] * 60:
                 self.broadcast("🔴 «%s» потребляет %.1f кВт (порог %.1f кВт) уже %d мин. Похоже, не выключен."
-                               % (o["name"], kw, thr, al["sustain_min"]), self.admins + self.guards, keyboard(False))
+                               % (o["name"], kw, thr, al["sustain_min"]), self.admins + self.guards, home_kb())
                 self.alert_sent[o["id"]] = time.time()
 
     def run(self):
@@ -240,12 +272,13 @@ class Bot:
         log.info("бот @%s запущен: админов %d, охраны %d", me.get("username"), len(self.admins), len(self.guards))
         try:
             self.tg.call("setMyCommands", commands=[
-                {"command": "now", "description": "Мощность объектов сейчас"},
+                {"command": "menu", "description": "Меню"},
+                {"command": "power", "description": "Мощность: объект и период"},
+                {"command": "energy", "description": "Энергия: объект и период"},
+                {"command": "now", "description": "Сводка сейчас"},
                 {"command": "report", "description": "Отчёт по объектам"},
-                {"command": "chart", "description": "График за 3 часа"},
-                {"command": "energy", "description": "Расход за месяц"},
                 {"command": "status", "description": "Связь со счётчиками"},
-                {"command": "id", "description": "id этого чата"}])
+                {"command": "help", "description": "Как пользоваться"}])
         except Exception as e:  # noqa: BLE001
             log.warning("setMyCommands: %s", e)
         offset, next_check = None, 0.0
@@ -258,7 +291,7 @@ class Bot:
                     try:
                         self.handle(upd)
                     except Exception as e:  # noqa: BLE001
-                        log.error("ошибка обработки: %s", e)
+                        log.exception("ошибка обработки: %s", e)
             except Exception as e:  # noqa: BLE001
                 log.error("ошибка опроса Telegram: %s", e)
                 time.sleep(10)

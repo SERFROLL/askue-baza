@@ -58,7 +58,7 @@ def _finish(fig, ax, cfg, minutes, title, t_first=None):
     ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
     fig.tight_layout()
     buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=130)
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
     plt.close(fig)
     return buf.getvalue()
 
@@ -91,6 +91,84 @@ def chart_objects(conn, cfg, minutes=180):
         title = "Мощность объектов за %s, слоями (сумма = вся база)" % _span(minutes)
     ax.legend(loc="upper left", fontsize=8, ncol=3, frameon=True, framealpha=0.85, edgecolor="none")
     return _finish(fig, ax, cfg, minutes, title, t_first)
+
+
+def chart_power(conn, cfg, objs, minutes):
+    """Мощность выбранных объектов за период. Один объект — линия среднего и полоса мин–макс по 2-с данным.
+    Возвращает (png, {oid: (среднее, (пик, время) или None)})."""
+    from . import query
+    fig, ax = plt.subplots(figsize=(8, 4.4))
+    stats, t_first = {}, None
+    single = len(objs) == 1
+    for n, o in enumerate(objs):
+        rows = query.power_series(conn, o["id"], minutes)
+        if not rows:
+            continue
+        t = [r[0] for r in rows]
+        p = [r[1] for r in rows]
+        t_first = min(t_first or t[0], t[0])
+        col = _color(o, n)
+        if single and any(r[2] is not None for r in rows):
+            lo = [r[2] if r[2] is not None else r[1] for r in rows]
+            hi = [r[3] if r[3] is not None else r[1] for r in rows]
+            ax.fill_between(t, lo, hi, color=col, alpha=0.2, lw=0, label="мин–макс (по 2-с данным)")
+        ax.plot(t, p, lw=1.6 if single else 1.4, color=col, label=o["name"], drawstyle="steps-post" if minutes > 15 else "default")
+        stats[o["id"]] = (sum(p) / len(p), query.power_peak(conn, o["id"], minutes))
+    step = query.POWER_STEP.get(minutes, 1)
+    how = "каждые 2 с" if step == 0 else "средние за %d мин" % step
+    names = objs[0]["name"] if single else "%d объекта(ов)" % len(objs)
+    if single:
+        ax.legend(loc="upper left", fontsize=8, ncol=3, frameon=True, framealpha=0.85, edgecolor="none")
+    else:
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), fontsize=8, ncol=4, frameon=False)
+    return _finish(fig, ax, cfg, minutes, "%s — мощность за %s (%s)" % (names, _span(minutes), how), t_first), stats
+
+
+def chart_energy(cfg, objs, buckets, series, step_min, mode, title):
+    """mode='cum' — нарастающим итогом (линии), mode='bars' — расход за каждый интервал (столбики).
+    «Вся база» среди нескольких объектов рисуется чёрной ступенькой поверх (она равна сумме вводов)."""
+    tz = ZoneInfo(cfg["timezone"])
+    fig, ax = plt.subplots(figsize=(8, 4.4))
+    step = dt.timedelta(minutes=step_min)
+    ends = [b + step for b in buckets]
+    shown = [(n, o) for n, o in enumerate(objs) if o["id"] in series]
+    if mode == "cum":
+        for n, o in shown:
+            ax.plot([buckets[0]] + ends if buckets else [], [0.0] + series[o["id"]] if buckets else [],
+                    lw=1.6, color=_color(o, n), label="%s  %s кВт·ч" % (o["name"], _kw(series[o["id"]][-1]) if series[o["id"]] else "—"))
+        ax.set_ylabel("кВт·ч с начала периода")
+    else:
+        bars = {o["id"]: [v - (series[o["id"]][i - 1] if i else 0.0) for i, v in enumerate(series[o["id"]])] for _, o in shown}
+        width = step * 0.85
+        stack_objs = [(n, o) for n, o in shown if not (o.get("total") and len(shown) > 1)]
+        bottom = [0.0] * len(buckets)
+        for n, o in stack_objs:
+            vals = bars[o["id"]]
+            ax.bar(buckets, vals, width=width, bottom=bottom, align="edge", color=_color(o, n),
+                   label="%s  %s кВт·ч" % (o["name"], _kw(sum(vals))))
+            bottom = [a + b for a, b in zip(bottom, vals)]
+        for n, o in shown:
+            if o.get("total") and len(shown) > 1:
+                ax.step(buckets + [ends[-1]], bars[o["id"]] + [bars[o["id"]][-1]], where="post", color="#111111", lw=1.4,
+                        label="%s  %s кВт·ч" % (o["name"], _kw(sum(bars[o["id"]]))))
+        ax.set_ylabel("кВт·ч за %s" % ("час" if step_min == 60 else "сутки" if step_min == 1440 else "%d мин" % step_min))
+    if buckets:
+        ax.set_xlim(buckets[0], ends[-1])
+    loc = mdates.AutoDateLocator(tz=tz, minticks=4, maxticks=10)
+    fmt = mdates.ConciseDateFormatter(loc, tz=tz, show_offset=False)
+    fmt.formats = ["%Y", "%d.%m", "%d.%m", "%H:%M", "%H:%M", "%H:%M:%S"]
+    fmt.zero_formats = ["", "%Y", "%d.%m", "%d.%m", "%H:%M", "%H:%M"]
+    ax.xaxis.set_major_locator(loc)
+    ax.xaxis.set_major_formatter(fmt)
+    ax.set_ylim(bottom=0)
+    # подписи под графиком, чтобы не закрывали столбики и линии
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.1), fontsize=8, ncol=3, frameon=False)
+    ax.set_title(title, loc="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 def chart_object(conn, cfg, oid, minutes=1440, night_kw=None):
