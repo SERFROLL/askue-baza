@@ -19,7 +19,7 @@ codes = ["m", "S", "C", "P:0", "Pt:0:3", "Pa:0", "Pd:%d" % one,
          "E:0", "Ed:%d" % two, "Ep:%d:today" % two, "Ep:%d:today" % (ALL | tot), "Ep:%d:yday" % one, "Ep:%d:mon" % tot,
          "Ep:%d:pmon" % one, "Ep:%d:cust" % one,
          "Ev:%d:today:c" % (ALL | tot), "Ev:%d:today:b" % (ALL | tot), "Ev:%d:7d:b" % two, "Ev:%d:mon:c" % one,
-         "chart:3", "now", "energy", "I",
+         "chart:3", "now", "energy", "I", "Sub", "m", "Sub", "m",
          "Pp:%d:now" % sub, "Pp:%d:180" % sub, "Ep:%d:today" % sub, "Ev:%d:today:b" % (sub | ALL | tot), "Ev:%d:today:c" % sub]
 bad = 0
 for c in codes:

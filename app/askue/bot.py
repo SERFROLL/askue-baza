@@ -21,7 +21,7 @@ import requests
 
 from . import config as config_mod
 from . import db, report
-from .dialog import Dialog, View, home_kb, info_text
+from .dialog import Dialog, View, home_kb, info_text, subscribers
 
 log = logging.getLogger("bot")
 
@@ -178,7 +178,9 @@ class Bot:
             except Exception:  # noqa: BLE001
                 pass
             admin = self.is_admin(chat_id)
-            self.render(chat_id, self.dialog.handle(self.conn, chat_id, cq.get("data", ""), admin), msg)
+            ch = msg["chat"]
+            title = ch.get("title") or ch.get("username") or ch.get("first_name") or ""
+            self.render(chat_id, self.dialog.handle(self.conn, chat_id, cq.get("data", ""), admin, title), msg)
             return
         msg = upd.get("message") or upd.get("channel_post")
         if not msg or "text" not in msg:
@@ -203,9 +205,9 @@ class Bot:
         if view is None:
             if text == "/start":
                 self.pin_info(chat_id)
-                view = d.menu(admin)
+                view = d.handle(c, chat_id, "m", admin)
             elif text in ("/menu", "меню"):
-                view = d.menu(admin)
+                view = d.handle(c, chat_id, "m", admin)
             elif text in ("/power", "мощность"):
                 view = d.handle(c, chat_id, "P:0", admin)
             elif text in ("/energy", "энергия") and admin:
@@ -250,7 +252,9 @@ class Bot:
         evening = dt.time.fromisoformat(cfg["reports"]["evening_time"])
         morning = dt.time.fromisoformat(cfg["reports"].get("morning_time", "08:00"))
         if now.time() >= evening and _state_get(c, "evening_sent") != today:
-            self.broadcast(report.evening_report(c, cfg), self.admins, home_kb())
+            # полный отчёт — администраторам и всем, кто подписался кнопкой в меню
+            full_to = list(dict.fromkeys(self.admins + [s for s in subscribers(c) if s not in self.guards]))
+            self.broadcast(report.evening_report(c, cfg), full_to, home_kb())
             if self.guards:
                 self.broadcast(report.evening_report(c, cfg, full=False), self.guards, home_kb())
             _state_set(c, "evening_sent", today)
@@ -296,7 +300,8 @@ class Bot:
             last = self.alert_sent.get(o["id"])
             if last is None or time.time() - last > al["repeat_min"] * 60:
                 self.broadcast("🔴 «%s» потребляет %.1f кВт (порог %.1f кВт) уже %d мин. Похоже, не выключен."
-                               % (o["name"], kw, thr, al["sustain_min"]), self.admins + self.guards, home_kb())
+                               % (o["name"], kw, thr, al["sustain_min"]),
+                               list(dict.fromkeys(self.admins + self.guards + subscribers(c))), home_kb())
                 self.alert_sent[o["id"]] = time.time()
 
     def run(self):

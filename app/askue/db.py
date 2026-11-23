@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS object_terms (
     object_id text NOT NULL, point text NOT NULL, sign smallint NOT NULL,
     PRIMARY KEY (object_id, point)
 );
+CREATE TABLE IF NOT EXISTS subscribers (
+    chat_id text PRIMARY KEY, title text, since timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS poll_errors (
     ts    timestamptz NOT NULL DEFAULT now(),
     point text,

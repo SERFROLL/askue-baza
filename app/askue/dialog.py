@@ -41,11 +41,38 @@ def btn(text, data):
     return {"text": text, "callback_data": data}
 
 
-def menu_kb(admin):
+def menu_kb(admin, subscribed=False):
     rows = [[btn("⚡ Мощность", "P:0"), btn("🔋 Энергия", "E:0")] if admin else [btn("⚡ Мощность", "P:0")],
             [btn("🟢 Сводка сейчас", "S")] + ([btn("🔌 Связь", "C")] if admin else []),
+            [btn("🔕 Не получать вечерний отчёт" if subscribed else "🔔 Получать вечерний отчёт", "Sub")],
             [btn("ℹ️ О системе", "I")]]
     return {"inline_keyboard": rows}
+
+
+SUB_SQL = "CREATE TABLE IF NOT EXISTS subscribers (chat_id text PRIMARY KEY, title text, since timestamptz NOT NULL DEFAULT now())"
+
+
+def is_subscribed(conn, chat_id):
+    conn.execute(SUB_SQL)
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM subscribers WHERE chat_id = %s", (str(chat_id),))
+        return cur.fetchone() is not None
+
+
+def subscribers(conn):
+    conn.execute(SUB_SQL)
+    with conn.cursor() as cur:
+        cur.execute("SELECT chat_id FROM subscribers ORDER BY since")
+        return [r[0] for r in cur.fetchall()]
+
+
+def toggle_subscription(conn, chat_id, title=""):
+    """Подписать/отписать чат. Возвращает True, если теперь подписан."""
+    if is_subscribed(conn, chat_id):
+        conn.execute("DELETE FROM subscribers WHERE chat_id = %s", (str(chat_id),))
+        return False
+    conn.execute("INSERT INTO subscribers (chat_id, title) VALUES (%s, %s) ON CONFLICT DO NOTHING", (str(chat_id), title))
+    return True
 
 
 def info_text(cfg):
@@ -84,8 +111,8 @@ class Dialog:
     def selected(self, mask):
         return [o for i, o in enumerate(self.objs) if mask >> i & 1]
 
-    def menu(self, admin):
-        return View("text", "<b>АСКУЭ базы</b>\nЧто показать?", kb=menu_kb(admin))
+    def menu(self, admin, subscribed=False):
+        return View("text", "<b>АСКУЭ базы</b>\nЧто показать?", kb=menu_kb(admin, subscribed))
 
     def pick(self, k, mask, title):
         rows, row = [], []
@@ -216,14 +243,22 @@ class Dialog:
         return self.energy_result(mask, "c%s-%s" % (d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d")))
 
     # ---------- разбор нажатия ----------
-    def handle(self, conn, chat_id, data, admin):
+    def handle(self, conn, chat_id, data, admin, title=""):
         """Возвращает View для нажатой кнопки (или None, если кнопка недоступна этому чату)."""
         self.conn = conn
         parts = data.split(":")
         k = parts[0]
         mask = int(parts[1]) if len(parts) > 1 and parts[1].isdigit() else 0
         if k == "m":
-            return self.menu(admin)
+            return self.menu(admin, is_subscribed(conn, chat_id))
+        if k == "Sub":
+            on = toggle_subscription(conn, chat_id, title)
+            ev = self.cfg["reports"]["evening_time"]
+            text = ("🔔 <b>Подписка включена.</b>\nКаждый день в %s сюда придёт вечерний отчёт по объектам, а ночью — "
+                    "предупреждения, если объект не выключен. Отказаться можно этой же кнопкой в меню." % ev
+                    if on else "🔕 <b>Подписка выключена.</b>\nВечерний отчёт и ночные предупреждения больше приходить не будут. "
+                               "Данные по-прежнему доступны по кнопкам меню.")
+            return View("text", text + "\n\nЧто показать?", kb=menu_kb(admin, on))
         if k == "S":
             return View("text", report.now_report(conn, self.cfg), kb=home_kb())
         if k == "I":
