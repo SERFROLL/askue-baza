@@ -126,9 +126,17 @@ class Bot:
         self.tg = Telegram()
         self.admins = _ids("TELEGRAM_CHAT_IDS")
         self.guards = _ids("TELEGRAM_GUARD_IDS")
+        # открытый доступ: любой чат получает всё меню; рассылки — только в чаты из списков выше
+        self.open = os.environ.get("TELEGRAM_OPEN_ACCESS", "").strip().lower() in ("1", "true", "yes", "да")
         self.conn = db.connect()
         self.dialog = Dialog(cfg)
         self.alert_sent = {}
+
+    def allowed(self, chat_id):
+        return self.open or str(chat_id) in self.admins + self.guards
+
+    def is_admin(self, chat_id):
+        return self.open or str(chat_id) in self.admins
 
     def broadcast(self, text, to, kb=None):
         for c in to:
@@ -163,13 +171,13 @@ class Bot:
             cq = upd["callback_query"]
             msg = cq["message"]
             chat_id = msg["chat"]["id"]
-            if str(chat_id) not in self.admins + self.guards:
+            if not self.allowed(chat_id):
                 return
             try:
                 self.tg.call("answerCallbackQuery", callback_query_id=cq["id"])
             except Exception:  # noqa: BLE001
                 pass
-            admin = str(chat_id) in self.admins
+            admin = self.is_admin(chat_id)
             self.render(chat_id, self.dialog.handle(self.conn, chat_id, cq.get("data", ""), admin), msg)
             return
         msg = upd.get("message") or upd.get("channel_post")
@@ -184,11 +192,11 @@ class Bot:
         if text in ("/id", "id"):
             self.tg.send(chat_id, "id этого чата: <code>%s</code>" % chat_id)
             return
-        if str(chat_id) not in self.admins + self.guards:
+        if not self.allowed(chat_id):
             if text == "/start":
                 self.tg.send(chat_id, "Бот АСКУЭ базы. Этот чат пока не подключён. id чата: <code>%s</code>" % chat_id)
             return
-        admin = str(chat_id) in self.admins
+        admin = self.is_admin(chat_id)
         d, c = self.dialog, self.conn
         d.conn = c
         view = d.custom_period(chat_id, raw) if admin else None
@@ -269,7 +277,8 @@ class Bot:
 
     def run(self):
         me = self.tg.call("getMe")
-        log.info("бот @%s запущен: админов %d, охраны %d", me.get("username"), len(self.admins), len(self.guards))
+        log.info("бот @%s запущен: админов %d, охраны %d, открытый доступ: %s", me.get("username"),
+                 len(self.admins), len(self.guards), "да" if self.open else "нет")
         try:
             self.tg.call("setMyCommands", commands=[
                 {"command": "menu", "description": "Меню"},
