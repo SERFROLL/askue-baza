@@ -4,88 +4,773 @@
   "timezone": "Asia/Krasnoyarsk",
   "refresh": "10s",
   "schemaVersion": 39,
-  "time": {"from": "now-24h", "to": "now"},
-  "links": [{"title": "Техника", "type": "link", "url": "/d/askue-tech", "icon": "dashboard"}],
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "links": [
+    {
+      "title": "Техника",
+      "type": "link",
+      "url": "/d/askue-tech",
+      "icon": "dashboard"
+    }
+  ],
   "panels": [
     {
-      "id": 1, "type": "stat",
+      "id": 1,
+      "type": "stat",
       "title": "Сейчас (среднее за 10 с), кВт",
-      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 5},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "options": {"reduceOptions": {"values": true, "calcs": ["lastNotNull"], "fields": ""},
-                  "colorMode": "none", "graphMode": "none", "textMode": "value_and_name", "justifyMode": "center"},
-      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 1}, "overrides": []},
-      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT o.name AS \"Объект\", avg(f.p) AS \"кВт\"\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE f.ts > now() - interval '10 seconds'\nGROUP BY o.name, o.sort ORDER BY o.sort"}]
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 5
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "colorMode": "none",
+        "graphMode": "none",
+        "textMode": "value_and_name",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatt",
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT o.name AS \"Объект\", avg(f.p) AS \"кВт\"\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE f.ts > now() - interval '10 seconds'\nGROUP BY o.name, o.sort ORDER BY o.sort"
+        }
+      ]
     },
     {
-      "id": 2, "type": "timeseries",
+      "id": 2,
+      "type": "timeseries",
       "title": "Мощность объектов, слоями (сумма = вся база), кВт",
-      "gridPos": {"x": 0, "y": 5, "w": 24, "h": 10},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 1,
-        "custom": {"lineWidth": 1, "fillOpacity": 65, "stacking": {"mode": "normal"}, "spanNulls": false}}, "overrides": []},
-      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max", "mean"]},
-                  "tooltip": {"mode": "multi", "sort": "none"}},
-      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT $__timeGroupAlias(m.ts, $__interval), o.name AS metric, avg(m.p) AS value\nFROM object_power_1m m JOIN objects o ON o.id = m.object_id\nWHERE $__timeFilter(m.ts) AND NOT o.is_total\nGROUP BY 1, o.name, o.sort ORDER BY 1, o.sort"}]
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatt",
+          "decimals": 1,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 65,
+            "stacking": {
+              "mode": "normal"
+            },
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1f6fd1"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Офис"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8c00"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "К11"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9b4dca"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2ca02c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e0202a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сторожка"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a86a32"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Вся база"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#555555"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "max",
+            "mean"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT $__timeGroupAlias(m.ts, $__interval), o.name AS metric, avg(m.p) AS value\nFROM object_power_1m m JOIN objects o ON o.id = m.object_id\nWHERE $__timeFilter(m.ts) AND NOT o.is_total\nGROUP BY 1, o.name, o.sort ORDER BY 1, o.sort"
+        }
+      ]
     },
     {
-      "id": 3, "type": "timeseries",
+      "id": 3,
+      "type": "timeseries",
       "title": "Мгновенная мощность (каждые 2 с), последние 30 минут, кВт",
       "timeFrom": "30m",
-      "gridPos": {"x": 0, "y": 15, "w": 24, "h": 9},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 1,
-        "custom": {"lineWidth": 1, "fillOpacity": 0, "spanNulls": 5000}}, "overrides": []},
-      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "min", "max"]},
-                  "tooltip": {"mode": "multi", "sort": "desc"}},
-      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT f.ts AS time, o.name AS metric, f.p AS value\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE $__timeFilter(f.ts) AND NOT o.is_total\nORDER BY 1"}]
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatt",
+          "decimals": 1,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "spanNulls": 5000
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1f6fd1"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Офис"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8c00"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "К11"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9b4dca"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2ca02c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e0202a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сторожка"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a86a32"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Вся база"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#555555"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT f.ts AS time, o.name AS metric, f.p AS value\nFROM object_power_fast f JOIN objects o ON o.id = f.object_id\nWHERE $__timeFilter(f.ts) AND NOT o.is_total\nORDER BY 1"
+        }
+      ]
     },
     {
-      "id": 4, "type": "table",
+      "id": 4,
+      "type": "table",
       "title": "Энергия за выбранный период — по показаниям счётчиков энергии (для сверки с энергосбытом)",
-      "gridPos": {"x": 0, "y": 24, "w": 10, "h": 9},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"decimals": 1}, "overrides": [{"matcher": {"id": "byName", "options": "кВт·ч"}, "properties": [{"id": "unit", "value": "kwatth"}]}]},
-      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "WITH pe AS (\n  SELECT p.id,\n   (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts DESC LIMIT 1)\n - (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts LIMIT 1) AS d\n  FROM points p)\nSELECT o.name AS \"Объект\", GREATEST(sum(t.sign * pe.d), 0) AS \"кВт·ч\"\nFROM objects o JOIN object_terms t ON t.object_id = o.id JOIN pe ON pe.id = t.point\nGROUP BY o.name, o.sort ORDER BY o.sort"}]
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 10,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "кВт·ч"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kwatth"
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "WITH pe AS (\n  SELECT p.id,\n   (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts DESC LIMIT 1)\n - (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts LIMIT 1) AS d\n  FROM points p)\nSELECT o.name AS \"Объект\", GREATEST(sum(t.sign * pe.d), 0) AS \"кВт·ч\"\nFROM objects o JOIN object_terms t ON t.object_id = o.id JOIN pe ON pe.id = t.point\nGROUP BY o.name, o.sort ORDER BY o.sort"
+        }
+      ]
     },
     {
-      "id": 5, "type": "table",
+      "id": 5,
+      "type": "table",
       "title": "Показания счётчиков энергии (приём) на начало и конец периода, кВт·ч",
-      "gridPos": {"x": 10, "y": 24, "w": 14, "h": 9},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"decimals": 1}, "overrides": []},
-      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT p.name AS \"Канал счётчика\", a.ts AS \"Начало\", a.e AS \"Показание\", b.ts AS \"Конец\", b.e AS \"Показание \", b.e - a.e AS \"Разность\"\nFROM points p\nLEFT JOIN LATERAL (SELECT ts, e_import AS e FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts LIMIT 1) a ON true\nLEFT JOIN LATERAL (SELECT ts, e_import AS e FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts DESC LIMIT 1) b ON true\nORDER BY p.sort"}]
+      "gridPos": {
+        "x": 10,
+        "y": 24,
+        "w": 14,
+        "h": 9
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 1
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT p.name AS \"Канал счётчика\", a.ts AS \"Начало\", a.e AS \"Показание\", b.ts AS \"Конец\", b.e AS \"Показание \", b.e - a.e AS \"Разность\"\nFROM points p\nLEFT JOIN LATERAL (SELECT ts, e_import AS e FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts LIMIT 1) a ON true\nLEFT JOIN LATERAL (SELECT ts, e_import AS e FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts DESC LIMIT 1) b ON true\nORDER BY p.sort"
+        }
+      ]
     },
     {
-      "id": 6, "type": "barchart",
+      "id": 6,
+      "type": "barchart",
       "title": "Энергия по дням за 30 дней, кВт·ч",
       "timeFrom": "30d",
-      "gridPos": {"x": 0, "y": 33, "w": 24, "h": 10},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"unit": "kwatth", "decimals": 0}, "overrides": []},
-      "options": {"xField": "День", "stacking": "normal", "groupWidth": 0.8, "barWidth": 0.9,
-                  "legend": {"displayMode": "list", "placement": "bottom"}, "xTickLabelRotation": -45, "showValue": "never"},
-      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT to_char(e.day, 'DD.MM.YYYY') AS \"День\", o.name, e.kwh\nFROM object_energy_day e JOIN objects o ON o.id = e.object_id\nWHERE e.day >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY e.day, o.sort"}],
-      "transformations": [{"id": "groupingToMatrix", "options": {"columnField": "name", "rowField": "День", "valueField": "kwh"}}]
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatth",
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1f6fd1"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Офис"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8c00"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "К11"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9b4dca"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2ca02c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e0202a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сторожка"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a86a32"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Вся база"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#555555"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "xField": "День",
+        "stacking": "normal",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "xTickLabelRotation": -45,
+        "showValue": "never"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT to_char(e.day, 'DD.MM.YYYY') AS \"День\", o.name, e.kwh\nFROM object_energy_day e JOIN objects o ON o.id = e.object_id\nWHERE e.day >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY e.day, o.sort"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "name",
+            "rowField": "День",
+            "valueField": "kwh"
+          }
+        }
+      ]
     },
     {
-      "id": 7, "type": "barchart",
+      "id": 7,
+      "type": "barchart",
       "title": "Ночное потребление (среднее с 01:00 до 05:00) по ночам, кВт — где забывают выключать",
       "timeFrom": "14d",
-      "gridPos": {"x": 0, "y": 43, "w": 24, "h": 10},
-      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
-      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 1}, "overrides": []},
-      "options": {"xField": "Ночь на", "stacking": "none", "groupWidth": 0.8, "barWidth": 0.9,
-                  "legend": {"displayMode": "list", "placement": "bottom"}, "xTickLabelRotation": -45, "showValue": "never"},
-      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
-        "rawSql": "SELECT to_char(n.night, 'DD.MM.YYYY') AS \"Ночь на\", o.name, n.p_avg\nFROM object_night n JOIN objects o ON o.id = n.object_id\nWHERE n.night >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY n.night, o.sort"}],
-      "transformations": [{"id": "groupingToMatrix", "options": {"columnField": "name", "rowField": "Ночь на", "valueField": "p_avg"}}]
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 24,
+        "h": 10
+      },
+      "datasource": {
+        "type": "grafana-postgresql-datasource",
+        "uid": "askue-pg"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kwatt",
+          "decimals": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 1"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#1f6fd1"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Офис"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#ff8c00"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "К11"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#9b4dca"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 2"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#2ca02c"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Склад 3"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#e0202a"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Сторожка"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#a86a32"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Вся база"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "#555555"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "xField": "Ночь на",
+        "stacking": "none",
+        "groupWidth": 0.8,
+        "barWidth": 0.9,
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "xTickLabelRotation": -45,
+        "showValue": "never"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code",
+          "rawSql": "SELECT to_char(n.night, 'DD.MM.YYYY') AS \"Ночь на\", o.name, n.p_avg\nFROM object_night n JOIN objects o ON o.id = n.object_id\nWHERE n.night >= ($__timeFrom() AT TIME ZONE 'Asia/Krasnoyarsk')::date AND NOT o.is_total\nORDER BY n.night, o.sort"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "name",
+            "rowField": "Ночь на",
+            "valueField": "p_avg"
+          }
+        }
+      ]
     }
   ]
 }
