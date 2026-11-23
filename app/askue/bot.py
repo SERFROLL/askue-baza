@@ -120,13 +120,18 @@ def handle_update(upd, conn, cfg, tg, chats):
     msg = upd.get("message") or upd.get("channel_post")
     if not msg or "text" not in msg:
         return
-    chat_id = msg["chat"]["id"]
+    chat = msg["chat"]
+    chat_id = chat["id"]
     text = msg["text"].strip().lower().split("@")[0]
+    log.info("сообщение из чата id=%s (%s %s): %s", chat_id, chat.get("type"),
+             chat.get("title") or chat.get("username") or chat.get("first_name") or "", text[:40])
     if text in ("/id", "id"):
         tg.send(chat_id, "id этого чата: <code>%s</code>" % chat_id)
         return
     if str(chat_id) not in chats:
-        return  # чужим чатам ничего не показываем
+        if text == "/start":
+            tg.send(chat_id, "Бот АСКУЭ базы. Этот чат пока не подключён к отчётам. id чата: <code>%s</code>" % chat_id)
+        return  # чужим чатам отчёты не показываем
     if text in ("/report", "отчёт", "отчет", "/start"):
         tg.send(chat_id, report.evening_report(conn, cfg, title="Отчёт по запросу"))
     elif text == "/status":
