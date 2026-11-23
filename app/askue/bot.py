@@ -28,7 +28,8 @@ HELP = ("Команды:\n/report — отчёт по объектам сейч�
 
 class Telegram:
     def __init__(self):
-        self.base = os.environ.get("TELEGRAM_API_BASE", "https://api.telegram.org").rstrip("/")
+        # docker compose передаёт незаданную переменную как пустую строку
+        self.base = (os.environ.get("TELEGRAM_API_BASE") or "https://api.telegram.org").rstrip("/")
         self.token = os.environ["TELEGRAM_BOT_TOKEN"]
         proxy = os.environ.get("TELEGRAM_PROXY")
         self.proxies = {"https": proxy, "http": proxy} if proxy else None
