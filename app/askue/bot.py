@@ -25,7 +25,8 @@ from . import db
 
 log = logging.getLogger("bot")
 
-HELP = ("Кнопки под сообщениями:\n«Сейчас» — мощность объектов и тренд за 2 часа\n«График 3 ч», «Сутки» — картинка\n"
+HELP = ("Кнопки под сообщениями:\n«Сейчас» — мощность объектов и тренд за 2 часа\n"
+        "«15 мин» — график мгновенной мощности (каждые 2 с)\n«3 ч», «Сутки» — график по минутным средним\n"
         "«По объекту» — график одного объекта за сутки\n«Расход» — энергия за месяц для сверки с энергосбытом\n"
         "«Связь» — состояние счётчиков\n\nКоманды: /now, /report, /chart, /energy, /status, /id")
 
@@ -69,8 +70,8 @@ class Telegram:
 
 
 def keyboard(admin):
-    rows = [[{"text": "Сейчас", "callback_data": "now"}, {"text": "График 3 ч", "callback_data": "chart:3"},
-             {"text": "Сутки", "callback_data": "chart:24"}],
+    rows = [[{"text": "Сейчас", "callback_data": "now"}, {"text": "15 мин", "callback_data": "chart:15"},
+             {"text": "3 ч", "callback_data": "chart:180"}, {"text": "Сутки", "callback_data": "chart:1440"}],
             [{"text": "По объекту", "callback_data": "objs"}]]
     if admin:
         rows[1] += [{"text": "Расход", "callback_data": "energy"}, {"text": "Связь", "callback_data": "status"}]
@@ -131,15 +132,16 @@ class Bot:
         elif action in ("report", "/report", "отчёт", "отчет"):
             self.tg.send(chat_id, report.evening_report(c, cfg, title="Отчёт по запросу"), keyboard(admin))
         elif action.startswith("chart:") or action == "/chart":
-            hours = int(action.split(":")[1]) if ":" in action else 3
-            self.tg.photo(chat_id, charts.chart_objects(c, cfg, hours), keyboard=keyboard(admin))
+            minutes = int(action.split(":")[1]) if ":" in action else 180
+            minutes = max(5, min(minutes, 7 * 1440))
+            self.tg.photo(chat_id, charts.chart_objects(c, cfg, minutes), keyboard=keyboard(admin))
         elif action == "objs":
             self.tg.send(chat_id, "Выберите объект:", objects_keyboard(cfg))
         elif action.startswith("obj:"):
             oid = action[4:]
             if any(o["id"] == oid for o in cfg["objects"]):
                 night = report.typical_night(c, cfg).get(oid)
-                self.tg.photo(chat_id, charts.chart_object(c, cfg, oid, 24, night), keyboard=keyboard(admin))
+                self.tg.photo(chat_id, charts.chart_object(c, cfg, oid, 1440, night), keyboard=keyboard(admin))
         elif action in ("energy", "/energy") and admin:
             self.tg.send(chat_id, report.energy_report(c, cfg), keyboard(admin))
         elif action in ("status", "/status") and admin:
