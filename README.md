@@ -32,14 +32,16 @@
 
 ## Развёртывание
 
-1. Виртуалка Ubuntu 24.04 в сети базы, пользователь `askue`, вход по ключу `askue_ed25519` с 3S-WS03.
-   С виртуалки должен быть доступ к 192.168.12.200:20108 и 192.168.14.200:20108.
-2. На виртуалке один раз: `bash scripts/vm_setup.sh` — Docker, ключ для GitHub, клон, `.env`.
-3. Запуск: `docker compose up -d --build`.
-4. Бот: вписать в `.env` `TELEGRAM_BOT_TOKEN`, строку `COMPOSE_PROFILES=bot`, затем
-   написать боту `/id` в группе охраны и вписать id в `TELEGRAM_CHAT_IDS`; `docker compose up -d`.
+Работает с 23.11.2026 на виртуалке **192.168.107.10** (hostname 3s-iot, Ubuntu 24.04, выдал
+И. Сапронов), пользователь `admin3s`, вход по ключу `askue_ed25519` с 3S-WS03, sudo без пароля.
+Код лежит в `~/askue-baza` (рабочая копия git, принимает push напрямую), секреты — в `~/askue-baza/.env`.
 
-Обновление с 3S-WS03 после `git push`: `powershell -File scripts\deploy.ps1 -VmHost <IP>`.
+- Дашборд: **http://192.168.107.10:3000** (просмотр без входа; вход admin — пароль в `.env`).
+- Обновление с 3S-WS03: `powershell -File scripts\deploy.ps1` — push в GitHub и на виртуалку, пересборка.
+- Бот: вписать в `.env` `TELEGRAM_BOT_TOKEN` и строку `COMPOSE_PROFILES=bot`, `docker compose up -d`;
+  написать боту `/id` в группе охраны, вписать id в `TELEGRAM_CHAT_IDS`, снова `docker compose up -d`.
+
+Новая виртуалка с нуля: `scripts/vm_setup.sh` (Docker, клон с GitHub, `.env`).
 
 Проверка опроса без базы (на любом компьютере с доступом к шлюзам):
 

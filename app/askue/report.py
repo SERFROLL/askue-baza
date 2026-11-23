@@ -45,8 +45,12 @@ def energy_today(conn, cfg):
     return {r[0]: r[1] for r in rows}
 
 
-def _fmt(x, nd=1):
-    return "—" if x is None else ("%." + str(nd) + "f") % x
+def _fmt(x, nd=1, unit=""):
+    """Число с запятой и единицей; «нет данных», если значения нет."""
+    if x is None:
+        return "нет данных"
+    s = (("%." + str(nd) + "f") % x).replace(".", ",")
+    return s + (" " + unit if unit else "")
 
 
 def assess(p, now_kw, night_kw, rep):
@@ -56,13 +60,13 @@ def assess(p, now_kw, night_kw, rep):
         return "⚪", "нет данных"
     if thr is not None:
         if now_kw > thr:
-            return "🔴", "выше порога %s кВт — не выключен?" % _fmt(thr)
-        return "🟢", "в норме (порог %s кВт)" % _fmt(thr)
+            return "🔴", "Выше порога %s — не выключен?" % _fmt(thr, 1, "кВт")
+        return "🟢", "В норме (порог %s)." % _fmt(thr, 1, "кВт")
     if night_kw is not None and now_kw > max(night_kw * rep["suspicious_factor"], rep["suspicious_min_kw"]):
-        return "🟠", "больше обычного ночного — проверить"
+        return "🟠", "Больше обычного ночного — проверить."
     if night_kw is None:
-        return "⚪", "порог не задан, статистики пока нет"
-    return "🟢", "как обычно ночью"
+        return "⚪", "Порог не задан, статистики пока нет."
+    return "🟢", "Как обычно ночью."
 
 
 def evening_report(conn, cfg, title="Вечерний отчёт"):
@@ -78,8 +82,9 @@ def evening_report(conn, cfg, title="Вечерний отчёт"):
         icon, note = assess(p, now_kw, night.get(p["id"]), cfg["reports"])
         if icon in ("🔴", "🟠"):
             flagged += 1
-        lines.append("%s <b>%s</b>: сейчас %s кВт, обычно ночью %s кВт, за сегодня %s кВт·ч. %s" % (
-            icon, p["name"], _fmt(now_kw), _fmt(night.get(p["id"])), _fmt(energy.get(p["id"]), 0), note))
+        lines.append("%s <b>%s</b>: сейчас %s, обычно ночью %s, за сегодня %s. %s" % (
+            icon, p["name"], _fmt(now_kw, 1, "кВт"), _fmt(night.get(p["id"]), 1, "кВт"),
+            _fmt(energy.get(p["id"]), 0, "кВт·ч"), note))
     lines.append("")
     lines.append("Требуют проверки: %d." % flagged if flagged else "Все объекты в норме.")
     return "\n".join(lines)
