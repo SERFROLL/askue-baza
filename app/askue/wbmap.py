@@ -20,6 +20,12 @@ def read_voltages(link, unit):
     return [w[0] * 0.01, w[2] * 0.01, w[4] * 0.01]
 
 
+def read_power(link, unit, channel):
+    """Быстрое чтение: P total, L1, L2, L3, кВт (один запрос, ~44 мс на 9600 бит/с)."""
+    wp = link.read_input(unit, REG_P + (channel - 1) * CH_STEP, 8)
+    return [s32(wp[k], wp[k + 1]) * 5.12e-06 for k in (0, 2, 4, 6)]
+
+
 def read_channel(link, unit, channel):
     off = (channel - 1) * CH_STEP
     wi = link.read_input(unit, REG_I + off, 6)

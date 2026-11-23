@@ -1,0 +1,76 @@
+{
+  "uid": "askue-tech",
+  "title": "АСКУЭ база — техника (каналы счётчиков)",
+  "timezone": "Asia/Krasnoyarsk",
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "time": {"from": "now-6h", "to": "now"},
+  "links": [{"title": "Объекты", "type": "link", "url": "/d/askue-main", "icon": "dashboard"}],
+  "panels": [
+    {
+      "id": 1, "type": "bargauge",
+      "title": "Мощность по каналам счётчиков сейчас (среднее за 10 с), кВт",
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "options": {"orientation": "horizontal", "displayMode": "gradient", "showUnfilled": true,
+                  "reduceOptions": {"values": true, "calcs": ["lastNotNull"], "fields": ""}},
+      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 2, "min": 0,
+                      "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}, "overrides": []},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT p.name AS \"Канал\", avg(f.p) AS \"кВт\"\nFROM power_fast f JOIN points p ON p.id = f.point\nWHERE f.ts > now() - interval '10 seconds'\nGROUP BY p.name, p.sort ORDER BY p.sort"}]
+    },
+    {
+      "id": 2, "type": "timeseries",
+      "title": "Мощность по каналам (минутные средние), кВт",
+      "gridPos": {"x": 0, "y": 8, "w": 24, "h": 9},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "fieldConfig": {"defaults": {"unit": "kwatt", "decimals": 1, "custom": {"lineWidth": 1, "fillOpacity": 0}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "right", "calcs": ["lastNotNull", "max", "mean"]},
+                  "tooltip": {"mode": "multi", "sort": "desc"}},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT $__timeGroupAlias(m.ts, $__interval), p.name AS metric, avg(m.p_avg) AS value\nFROM power_1m m JOIN points p ON p.id = m.point\nWHERE $__timeFilter(m.ts)\nGROUP BY 1, p.name ORDER BY 1"}]
+    },
+    {
+      "id": 3, "type": "timeseries",
+      "title": "Напряжение по фазам (ША1), В",
+      "gridPos": {"x": 0, "y": 17, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "fieldConfig": {"defaults": {"unit": "volt", "decimals": 1, "custom": {"lineWidth": 1}}, "overrides": []},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT ts AS time, u1 AS \"L1\", u2 AS \"L2\", u3 AS \"L3\" FROM readings\nWHERE point = 'M1.1' AND $__timeFilter(ts) ORDER BY 1"}]
+    },
+    {
+      "id": 4, "type": "timeseries",
+      "title": "Напряжение по фазам (ША2), В",
+      "gridPos": {"x": 12, "y": 17, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "fieldConfig": {"defaults": {"unit": "volt", "decimals": 1, "custom": {"lineWidth": 1}}, "overrides": []},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT ts AS time, u1 AS \"L1\", u2 AS \"L2\", u3 AS \"L3\" FROM readings\nWHERE point = 'M3' AND $__timeFilter(ts) ORDER BY 1"}]
+    },
+    {
+      "id": 5, "type": "table",
+      "title": "Последние показания по фазам",
+      "gridPos": {"x": 0, "y": 25, "w": 24, "h": 9},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT DISTINCT ON (p.sort) p.name AS \"Канал\", r.ts AS \"Время\",\n  round(r.i1::numeric,1) AS \"I1, А\", round(r.i2::numeric,1) AS \"I2, А\", round(r.i3::numeric,1) AS \"I3, А\",\n  round(r.p1::numeric,2) AS \"P1, кВт\", round(r.p2::numeric,2) AS \"P2, кВт\", round(r.p3::numeric,2) AS \"P3, кВт\",\n  round(r.pf::numeric,2) AS \"cos φ\",\n  round(r.e_import::numeric,1) AS \"Приём, кВт·ч\", round(r.e_export::numeric,2) AS \"Отдача, кВт·ч\"\nFROM readings r JOIN points p ON p.id = r.point\nWHERE r.ts > now() - interval '1 day'\nORDER BY p.sort, r.ts DESC"}]
+    },
+    {
+      "id": 6, "type": "table",
+      "title": "Рост энергии отдачи за сутки (должен быть 0; рост — ошибка подключения ТТ)",
+      "gridPos": {"x": 0, "y": 34, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT p.name AS \"Канал\", round((max(r.e_export) - min(r.e_export))::numeric, 3) AS \"Отдача за сутки, кВт·ч\"\nFROM readings r JOIN points p ON p.id = r.point\nWHERE r.ts > now() - interval '1 day'\nGROUP BY p.name, p.sort ORDER BY p.sort"}]
+    },
+    {
+      "id": 7, "type": "table",
+      "title": "Журнал ошибок опроса",
+      "gridPos": {"x": 12, "y": 34, "w": 12, "h": 8},
+      "datasource": {"type": "grafana-postgresql-datasource", "uid": "askue-pg"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "editorMode": "code",
+        "rawSql": "SELECT ts AS \"Время\", point AS \"Точка\", error AS \"Ошибка\" FROM poll_errors ORDER BY ts DESC LIMIT 50"}]
+    }
+  ]
+}
