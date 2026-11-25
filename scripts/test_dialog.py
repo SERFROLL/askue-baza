@@ -13,7 +13,7 @@ one = 1 << 3          # Склад 2
 two = (1 << 0) | (1 << 3)
 ids = [o["id"] for o in cfg["objects"]]
 tot = 1 << ids.index("total")
-sub = (1 << ids.index("sklad3")) | (1 << ids.index("sklad3_1")) | (1 << ids.index("sklad3_2"))
+sub = (1 << ids.index("sklad3")) | (1 << ids.index("servis777"))
 codes = ["m", "S", "C", "P:0", "Pt:0:3", "Pa:0", "Pd:%d" % one,
          "Pp:%d:now" % one, "Pp:%d:now" % ALL, "Pp:%d:15" % one, "Pp:%d:180" % one, "Pp:%d:720" % two, "Pp:%d:1440" % ALL,
          "E:0", "Ed:%d" % two, "Ep:%d:today" % two, "Ep:%d:today" % (ALL | tot), "Ep:%d:yday" % one, "Ep:%d:mon" % tot,

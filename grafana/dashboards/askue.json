@@ -64,7 +64,7 @@
     {
       "id": 2,
       "type": "timeseries",
-      "title": "Мощность объектов, слоями (сумма = вся база; Склад 3 — по линиям), кВт",
+      "title": "Мощность объектов, слоями (сумма = вся база), кВт",
       "gridPos": {
         "x": 0,
         "y": 5,
@@ -152,7 +152,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3"
+              "options": "3 ангар"
             },
             "properties": [
               {
@@ -167,29 +167,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3/1"
+              "options": "Сервис 777"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#ff7f7f"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Склад 3/2"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#9e0b14"
+                  "fixedColor": "#17becf"
                 }
               }
             ]
@@ -340,7 +325,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3"
+              "options": "3 ангар"
             },
             "properties": [
               {
@@ -355,29 +340,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3/1"
+              "options": "Сервис 777"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#ff7f7f"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Склад 3/2"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#9e0b14"
+                  "fixedColor": "#17becf"
                 }
               }
             ]
@@ -596,7 +566,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3"
+              "options": "3 ангар"
             },
             "properties": [
               {
@@ -611,29 +581,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3/1"
+              "options": "Сервис 777"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#ff7f7f"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Склад 3/2"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#9e0b14"
+                  "fixedColor": "#17becf"
                 }
               }
             ]
@@ -786,7 +741,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3"
+              "options": "3 ангар"
             },
             "properties": [
               {
@@ -801,29 +756,14 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Склад 3/1"
+              "options": "Сервис 777"
             },
             "properties": [
               {
                 "id": "color",
                 "value": {
                   "mode": "fixed",
-                  "fixedColor": "#ff7f7f"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Склад 3/2"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "#9e0b14"
+                  "fixedColor": "#17becf"
                 }
               }
             ]

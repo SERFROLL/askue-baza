@@ -25,12 +25,16 @@ points:
   - {id: "M1.3", name: "M1 к.3 — К11",                  gateway: GW1, unit: 11, channel: 3}
   - {id: "M1.4", name: "M1 к.4 — линия на ВРУ С2 + С3", gateway: GW1, unit: 11, channel: 4}
   - {id: "M2",   name: "M2 — Сторожка + компрессор",     gateway: GW1, unit: 12, channel: 1}
-  - {id: "M3",   name: "M3 — Склад 3/1",         gateway: GW2, unit: 21, channel: 1}
-  - {id: "M4",   name: "M4 — Склад 3/2",         gateway: GW2, unit: 22, channel: 1}
+  - {id: "M3",   name: "M3 — 3 ангар",           gateway: GW2, unit: 21, channel: 1}
+  - {id: "M4",   name: "M4 — Сервис 777",        gateway: GW2, unit: 22, channel: 1}
 
 # Объекты — то, за чем следят люди. terms: какие точки складывать (+) и вычитать (−).
-# Склад 2 считается: линия на ВРУ «Склад 2 + Склад 3» минус Склад 3 (M3 + M4).
+# Склад 2 считается: линия на ВРУ «Склад 2 + Склад 3» минус M3 и M4.
 #   От этого ВРУ питаются только Склад 2 и Склад 3 (подтвердил С. В. Фролков 23.11.2026).
+# 25.11.2026 (С. В. Фролков): потребителя «Сервис 777», раньше питавшегося без счётчика от щита в боксе 2,
+#   переподключили через счётчик M4 (раньше M4 был «Склад 3/2»). M3 теперь «3 ангар».
+#   Сервис 777 по-прежнему питается от линии M1 к.4, поэтому вычитается из Склада 2.
+#   Данные M4 до переподключения тоже показываются как «Сервис 777».
 # К линии Сторожки подключён ещё компрессор (С. В. Фролков, 23.11.2026) — объект «Сторожка + компрессор».
 # night_max_kw — сколько объект может потреблять в нерабочее время, кВт (null — порог не задан,
 #   тогда объект сравнивается со своим обычным ночным потреблением за прошлые дни).
@@ -44,9 +48,8 @@ objects:
   - {id: office,    name: "Офис",     color: "#ff8c00", terms: ["+M1.2"],               night_max_kw: null}
   - {id: k11,       name: "К11",      color: "#9b4dca", terms: ["+M1.3"],               night_max_kw: null}
   - {id: sklad2,    name: "Склад 2",  color: "#2ca02c", terms: ["+M1.4", "-M3", "-M4"], night_max_kw: null}
-  - {id: sklad3,    name: "Склад 3",  color: "#e0202a", terms: ["+M3", "+M4"],          night_max_kw: null}
-  - {id: sklad3_1,  name: "Склад 3/1", short: "Склад 3/1", parent: sklad3, color: "#ff7f7f", terms: ["+M3"], night_max_kw: null}
-  - {id: sklad3_2,  name: "Склад 3/2", short: "Склад 3/2", parent: sklad3, color: "#9e0b14", terms: ["+M4"], night_max_kw: null}
+  - {id: sklad3,    name: "3 ангар",  color: "#e0202a", terms: ["+M3"],                 night_max_kw: null}
+  - {id: servis777, name: "Сервис 777", color: "#17becf", terms: ["+M4"],               night_max_kw: null}
   - {id: storozhka, name: "Сторожка + компрессор", short: "Сторожка+компр.", color: "#a86a32", terms: ["+M2"],                 night_max_kw: null}
   - {id: total,     name: "Вся база", color: "#555555", terms: ["+M1.1", "+M1.2", "+M1.3", "+M1.4", "+M2"], total: true}
 
