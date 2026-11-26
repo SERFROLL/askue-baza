@@ -4,6 +4,7 @@ import statistics
 from zoneinfo import ZoneInfo
 
 from .config import objects as cfg_objects
+from .query import object_kwh
 
 SPARK = "▁▂▃▄▅▆▇█"
 
@@ -223,13 +224,9 @@ def period_energy(conn, start, end=None):
         LEFT JOIN LATERAL (SELECT e_import AS e1, ts AS t1 FROM readings r
                            WHERE r.point = p.id AND ts >= %%s %s ORDER BY ts DESC LIMIT 1) b ON true
         ORDER BY p.sort""" % (end_sql, end_sql), params + params)
-    delta = {pid: (e1 - e0) if e0 is not None and e1 is not None else None for pid, _, e0, e1, _, _ in pts}
-    objs = []
-    for oid, name, is_total in _q(conn, "SELECT id, name, is_total FROM objects ORDER BY sort"):
-        terms = _q(conn, "SELECT point, sign FROM object_terms WHERE object_id = %s", (oid,))
-        vals = [delta.get(pid) for pid, _ in terms]
-        kwh = None if any(v is None for v in vals) else max(0.0, sum(s * v for (_, s), v in zip(terms, vals)))
-        objs.append((oid, name, is_total, kwh))
+    rows = _q(conn, "SELECT id, name, is_total FROM objects ORDER BY sort")
+    kwh = object_kwh(conn, [r[0] for r in rows], start, end)  # с учётом смены состава объектов во времени
+    objs = [(oid, name, is_total, kwh.get(oid)) for oid, name, is_total in rows]
     t0 = min([r[4] for r in pts if r[4]], default=None)
     t1 = max([r[5] for r in pts if r[5]], default=None)
     return pts, objs, t0, t1

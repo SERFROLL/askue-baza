@@ -4,14 +4,16 @@
   readings     — раз в минуту полный набор по точке: U, I, P, cos, энергия приём/отдача (счётчики энергии).
   power_fast   — каждые fast_interval_s: P total и по фазам; хранится fast_retention_days.
   power_1m     — минутные средняя / мин / макс мощности из power_fast; хранится всегда.
-  objects, object_terms — объекты и из каких точек они складываются (из config.yaml).
+  objects, object_terms — объекты и из каких точек они складываются (из config.yaml). Состав объекта может
+    меняться во времени (history в config.yaml): у каждой строки object_terms есть период действия
+    [valid_from, valid_to) (NULL — без границы), номер периода period и n_period — сколько точек в этом периоде.
 Представления по объектам: object_power_fast, object_power_1m, object_energy_day, object_night.
 """
 import time
 
 import psycopg
 
-from .config import db_dsn, parse_terms
+from .config import db_dsn, parse_terms, periods
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS readings (
@@ -48,8 +50,9 @@ CREATE TABLE IF NOT EXISTS objects (
 );
 ALTER TABLE objects ADD COLUMN IF NOT EXISTS parent text;
 CREATE TABLE IF NOT EXISTS object_terms (
-    object_id text NOT NULL, point text NOT NULL, sign smallint NOT NULL,
-    PRIMARY KEY (object_id, point)
+    object_id text NOT NULL, period int NOT NULL, point text NOT NULL, sign smallint NOT NULL,
+    valid_from timestamptz, valid_to timestamptz, n_period int NOT NULL,
+    PRIMARY KEY (object_id, period, point)
 );
 CREATE TABLE IF NOT EXISTS subscribers (
     chat_id text PRIMARY KEY, title text, since timestamptz NOT NULL DEFAULT now()
@@ -65,13 +68,15 @@ CREATE TABLE IF NOT EXISTS poll_errors (
 VIEWS = """
 CREATE OR REPLACE VIEW object_power_fast AS
 SELECT f.ts, t.object_id, GREATEST(sum(t.sign * f.p), 0) AS p
-FROM power_fast f JOIN object_terms t ON t.point = f.point JOIN objects o ON o.id = t.object_id
-GROUP BY f.ts, t.object_id HAVING count(*) = max(o.n_terms);
+FROM power_fast f JOIN object_terms t ON t.point = f.point
+ AND (t.valid_from IS NULL OR f.ts >= t.valid_from) AND (t.valid_to IS NULL OR f.ts < t.valid_to)
+GROUP BY f.ts, t.object_id HAVING count(*) = max(t.n_period);
 
 CREATE OR REPLACE VIEW object_power_1m AS
 SELECT m.ts, t.object_id, GREATEST(sum(t.sign * m.p_avg), 0) AS p
-FROM power_1m m JOIN object_terms t ON t.point = m.point JOIN objects o ON o.id = t.object_id
-GROUP BY m.ts, t.object_id HAVING count(*) = max(o.n_terms);
+FROM power_1m m JOIN object_terms t ON t.point = m.point
+ AND (t.valid_from IS NULL OR m.ts >= t.valid_from) AND (t.valid_to IS NULL OR m.ts < t.valid_to)
+GROUP BY m.ts, t.object_id HAVING count(*) = max(t.n_period);
 
 CREATE OR REPLACE VIEW point_energy_day AS
 SELECT (ts AT TIME ZONE '{tz}')::date AS day, point,
@@ -79,10 +84,17 @@ SELECT (ts AT TIME ZONE '{tz}')::date AS day, point,
        min(ts) AS t_first, max(ts) AS t_last
 FROM readings GROUP BY 1, 2;
 
+-- энергия объекта за сутки: по каждому периоду состава отдельно (показания внутри периода), затем сумма
 CREATE OR REPLACE VIEW object_energy_day AS
-SELECT d.day, t.object_id, GREATEST(sum(t.sign * d.kwh), 0) AS kwh, min(d.t_first) AS t_first
-FROM point_energy_day d JOIN object_terms t ON t.point = d.point JOIN objects o ON o.id = t.object_id
-GROUP BY d.day, t.object_id HAVING count(*) = max(o.n_terms);
+SELECT day, object_id, GREATEST(sum(kwh), 0) AS kwh, min(t_first) AS t_first FROM (
+  SELECT day, object_id, period, sum(sign * kwh) AS kwh, min(t_first) AS t_first FROM (
+    SELECT (r.ts AT TIME ZONE '{tz}')::date AS day, t.object_id, t.period, t.point, t.sign, t.n_period,
+           max(r.e_import) - min(r.e_import) AS kwh, min(r.ts) AS t_first
+    FROM readings r JOIN object_terms t ON t.point = r.point
+     AND (t.valid_from IS NULL OR r.ts >= t.valid_from) AND (t.valid_to IS NULL OR r.ts < t.valid_to)
+    GROUP BY 1, 2, 3, 4, 5, 6) a
+  GROUP BY day, object_id, period HAVING count(*) = max(n_period)) b
+GROUP BY day, object_id;
 
 CREATE OR REPLACE VIEW object_night AS
 SELECT (ts AT TIME ZONE '{tz}')::date AS night, object_id, avg(p) AS p_avg, max(p) AS p_max
@@ -106,11 +118,12 @@ def connect(retries=30):
 
 
 def init(conn, cfg):
-    conn.execute(SCHEMA)
     h1, h2 = cfg["reports"]["night_hours"]
-    # представления пересоздаются: их состав мог поменяться
+    # представления пересоздаются: их состав мог поменяться; object_terms строится из config.yaml заново
     for v in ("object_night", "object_energy_day", "point_energy_day", "object_power_1m", "object_power_fast"):
         conn.execute("DROP VIEW IF EXISTS %s" % v)
+    conn.execute("DROP TABLE IF EXISTS object_terms")
+    conn.execute(SCHEMA)
     conn.execute(VIEWS.format(tz=cfg["timezone"], h1=int(h1), h2=int(h2)))
     with conn.transaction():
         with conn.cursor() as cur:
@@ -124,9 +137,10 @@ def init(conn, cfg):
                 cur.execute("INSERT INTO objects (id, name, sort, night_max_kw, is_total, n_terms, parent) "
                             "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                             (o["id"], o["name"], n, o.get("night_max_kw"), bool(o.get("total")), len(terms), o.get("parent")))
-                for pid, sign in terms:
-                    cur.execute("INSERT INTO object_terms (object_id, point, sign) VALUES (%s, %s, %s)",
-                                (o["id"], pid, sign))
+                for k, (vf, vt, pterms) in enumerate(periods(o, cfg["timezone"])):
+                    for pid, sign in pterms:
+                        cur.execute("INSERT INTO object_terms (object_id, period, point, sign, valid_from, valid_to, n_period) "
+                                    "VALUES (%s, %s, %s, %s, %s, %s, %s)", (o["id"], k, pid, sign, vf, vt, len(pterms)))
     # минуты до запуска быстрого опроса: минутная запись = мгновенный снимок из readings
     conn.execute("""
         INSERT INTO power_1m (ts, point, p_avg, p_min, p_max, n)

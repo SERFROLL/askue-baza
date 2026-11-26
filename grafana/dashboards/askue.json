@@ -448,7 +448,7 @@
           "format": "table",
           "rawQuery": true,
           "editorMode": "code",
-          "rawSql": "WITH pe AS (\n  SELECT p.id,\n   (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts DESC LIMIT 1)\n - (SELECT e_import FROM readings r WHERE r.point = p.id AND $__timeFilter(r.ts) ORDER BY ts LIMIT 1) AS d\n  FROM points p)\nSELECT o.name AS \"Объект\", GREATEST(sum(t.sign * pe.d), 0) AS \"кВт·ч\"\nFROM objects o JOIN object_terms t ON t.object_id = o.id JOIN pe ON pe.id = t.point\nGROUP BY o.name, o.sort ORDER BY o.sort"
+          "rawSql": "WITH t AS (\n  SELECT o.name, o.sort, t.point, t.sign,\n   GREATEST(COALESCE(t.valid_from, '-infinity'), $__timeFrom()::timestamptz) AS a,\n   LEAST(COALESCE(t.valid_to, 'infinity'), $__timeTo()::timestamptz) AS b\n  FROM objects o JOIN object_terms t ON t.object_id = o.id),\nd AS (\n  SELECT t.*,\n   (SELECT e_import FROM readings r WHERE r.point = t.point AND r.ts >= t.a AND r.ts < t.b ORDER BY ts DESC LIMIT 1)\n - (SELECT e_import FROM readings r WHERE r.point = t.point AND r.ts >= t.a AND r.ts < t.b ORDER BY ts LIMIT 1) AS dd\n  FROM t WHERE t.a < t.b)\n-- состав объекта по периодам (history в config.yaml): каждый период считается по своим точкам\nSELECT name AS \"Объект\", GREATEST(sum(sign * dd), 0) AS \"кВт·ч\"\nFROM d GROUP BY name, sort ORDER BY sort"
         }
       ]
     },

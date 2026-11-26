@@ -102,44 +102,142 @@ def point_readings(conn, pids, start, end):
     return out
 
 
+def object_periods(conn, oids):
+    """{объект: [(действует_с | None, действует_до | None, [(точка, знак)])]} из object_terms.
+    Периоды, когда объекта не было (пустой состав), в таблице отсутствуют — их энергия считается 0."""
+    out = {}
+    rows = _q(conn, """SELECT object_id, period, valid_from, valid_to, point, sign FROM object_terms
+                       WHERE object_id = ANY(%s) ORDER BY object_id, period, point""", (list(oids),))
+    for oid, k, vf, vt, pid, s in rows:
+        per = out.setdefault(oid, {}).setdefault(k, (vf, vt, []))
+        per[2].append((pid, s))
+    return {oid: [ps[k] for k in sorted(ps)] for oid, ps in out.items()}
+
+
+def _clip(vf, vt, start, end):
+    """Пересечение периода [vf, vt) с [start, end); end=None — до сейчас. None, если не пересекаются."""
+    a = start if vf is None or (start is not None and start > vf) else vf
+    if vt is None:
+        b = end
+    elif end is None:
+        b = vt
+    else:
+        b = min(vt, end)
+    if b is not None and a is not None and a >= b:
+        return None
+    return a, b
+
+
+def _first_last(conn, pid, a, b, cache):
+    """Показания счётчика энергии приёма: (первое, последнее) в [a, b) или None, если показаний нет."""
+    key = (pid, a, b)
+    if key not in cache:
+        cond = "AND ts < %s" if b is not None else ""
+        par = (pid, a) + ((b,) if b is not None else ())
+        f = _q(conn, "SELECT e_import FROM readings WHERE point = %%s AND ts >= %%s %s ORDER BY ts LIMIT 1" % cond, par)
+        l = _q(conn, "SELECT e_import FROM readings WHERE point = %%s AND ts >= %%s %s ORDER BY ts DESC LIMIT 1" % cond, par)
+        cache[key] = (f[0][0], l[0][0]) if f and l and f[0][0] is not None and l[0][0] is not None else None
+    return cache[key]
+
+
+def object_kwh(conn, oids, start, end=None):
+    """{объект: кВт·ч или None (нет показаний)} за [start, end) с учётом смены состава объектов во времени:
+    каждый период состава считается по своим точкам, результаты складываются."""
+    per = object_periods(conn, oids)
+    cache, out = {}, {}
+    for oid in oids:
+        if oid not in per:
+            out[oid] = None
+            continue
+        total, ok = 0.0, True
+        for vf, vt, terms in per[oid]:
+            seg = _clip(vf, vt, start, end)
+            if seg is None:
+                continue
+            for pid, s in terms:
+                fl = _first_last(conn, pid, seg[0], seg[1], cache)
+                if fl is None:
+                    ok = False
+                    break
+                total += s * (fl[1] - fl[0])
+            if not ok:
+                break
+        out[oid] = max(0.0, total) if ok else None
+    return out
+
+
 def energy_totals(conn, objs, start, end):
-    """{объект: кВт·ч} за период по разности показаний счётчиков энергии; плюс показания по точкам."""
+    """{объект: кВт·ч} за период по разности показаний счётчиков энергии (с учётом смены состава объектов);
+    плюс показания по точкам текущего состава."""
     terms = terms_of(objs)
     pids = sorted({pid for t in terms.values() for pid, _ in t})
     rd = point_readings(conn, pids, start, end)
-    tot = {}
-    for oid, t in terms.items():
-        if all(pid in rd for pid, _ in t):
-            tot[oid] = max(0.0, sum(s * (rd[pid][2] - rd[pid][0]) for pid, s in t))
+    tot = {oid: v for oid, v in object_kwh(conn, list(terms), start, end).items() if v is not None}
     return tot, rd
 
 
+def _step_td(step):
+    n, unit = step.split()
+    unit = unit.rstrip("s")
+    return dt.timedelta(**{{"minute": "minutes", "hour": "hours", "day": "days"}[unit]: int(n)})
+
+
 def energy_series(conn, cfg, objs, start, end, step):
-    """Нарастающий итог по объектам: (времена концов интервалов, {объект: [кВт·ч от начала периода]}).
-    step — интервал PostgreSQL ('10 minutes', '1 hour', '1 day'); интервалы выровнены по местной полуночи."""
-    terms = terms_of(objs)
-    pids = sorted({pid for t in terms.values() for pid, _ in t})
+    """Нарастающий итог по объектам: (времена начал интервалов, {объект: [кВт·ч от начала периода]}).
+    step — интервал PostgreSQL ('10 minutes', '1 hour', '1 day'); интервалы выровнены по местной полуночи.
+    Учитывается смена состава объектов во времени (history в config.yaml)."""
+    oids = [o["id"] for o in objs]
+    per = object_periods(conn, oids)
+    pids = sorted({pid for ps in per.values() for _, _, t in ps for pid, _ in t})
     origin = start.replace(hour=0, minute=0, second=0, microsecond=0)
-    per_point, e0 = {}, {}
+    td = _step_td(step)
+    per_point = {}
     for pid in pids:
-        first = _q(conn, "SELECT e_import FROM readings WHERE point = %s AND ts >= %s AND ts < %s ORDER BY ts LIMIT 1",
-                   (pid, start, end))
-        if not first:
-            continue
-        e0[pid] = first[0][0]
-        per_point[pid] = {r[0]: r[1] for r in _q(conn, """
-            SELECT date_bin(%s::interval, ts, %s) AS b, max(e_import) FROM readings
-            WHERE point = %s AND ts >= %s AND ts < %s GROUP BY b""", (step, origin, pid, start, end))}
+        rows = _q(conn, """SELECT date_bin(%s::interval, ts, %s) AS b, max(e_import) FROM readings
+                           WHERE point = %s AND ts >= %s AND ts < %s GROUP BY b""", (step, origin, pid, start, end))
+        if rows:
+            per_point[pid] = {r[0]: r[1] for r in rows}
     buckets = sorted(set().union(*[set(v) for v in per_point.values()])) if per_point else []
-    series = {}
-    for oid, t in terms.items():
-        if not all(pid in per_point for pid, _ in t):
-            continue
-        vals, last = [], {pid: 0.0 for pid, _ in t}
+    cum = {}  # последнее известное показание точки на конец каждого интервала
+    for pid, vals in per_point.items():
+        last, cum[pid] = None, {}
         for b in buckets:
-            for pid, _ in t:  # если в интервале нет показаний — берём предыдущее значение
-                if b in per_point[pid]:
-                    last[pid] = per_point[pid][b] - e0[pid]
-            vals.append(max(0.0, sum(s * last[pid] for pid, s in t)))
+            if b in vals:
+                last = vals[b]
+            cum[pid][b] = last
+    cache, series = {}, {}
+    for oid in oids:
+        if oid not in per:
+            continue
+        segs, ok = [], True
+        for vf, vt, terms in per[oid]:
+            seg = _clip(vf, vt, start, end)
+            if seg is None:
+                continue
+            e0, e1 = {}, {}
+            for pid, _ in terms:
+                fl = _first_last(conn, pid, seg[0], seg[1], cache)
+                if fl is None or pid not in cum:
+                    ok = False
+                    break
+                e0[pid], e1[pid] = fl
+            if not ok:
+                break
+            segs.append((seg[0], seg[1], terms, e0, e1))
+        if not ok:
+            continue
+        vals = []
+        for b in buckets:
+            be, v = b + td, 0.0
+            for a, bnd, terms, e0, e1 in segs:
+                if a >= be:
+                    continue  # период начинается позже этого интервала
+                for pid, s in terms:
+                    if bnd is not None and bnd <= be:
+                        x = e1[pid]  # период уже закончился
+                    else:
+                        x = cum[pid][b] if cum[pid][b] is not None else e0[pid]
+                    v += s * (max(x, e0[pid]) - e0[pid])
+            vals.append(max(0.0, v))
         series[oid] = vals
     return buckets, series

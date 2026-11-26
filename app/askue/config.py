@@ -1,5 +1,7 @@
+import datetime as dt
 import os
 import re
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -8,13 +10,30 @@ TERM = re.compile(r"^([+-])(.+)$")
 
 
 def parse_terms(obj):
-    """['+M1.4', '-M3'] -> [('M1.4', 1), ('M3', -1)]"""
+    """['+M1.4', '-M3'] -> [('M1.4', 1), ('M3', -1)]. Это ТЕКУЩИЙ состав объекта (без истории)."""
     out = []
-    for t in obj["terms"]:
+    for t in obj.get("terms") or []:
         m = TERM.match(t.strip())
         if not m:
             raise ValueError("объект %s: неверный член %r (нужно +ID или -ID)" % (obj["id"], t))
         out.append((m.group(2), 1 if m.group(1) == "+" else -1))
+    return out
+
+
+def periods(obj, tzname):
+    """Состав объекта по периодам: [(действует_с | None, действует_до | None, [(точка, знак)])] по времени.
+    В config.yaml: history — составы, которые действовали ДО указанного местного времени, по возрастанию:
+      history: [{until: "2026-11-25 12:05", terms: ["+M3", "+M4"]}]
+    terms самого объекта действуют с последнего until и дальше. Пустой terms — объекта в этот период не было (0)."""
+    tz = ZoneInfo(tzname)
+    out, prev = [], None
+    for h in obj.get("history") or []:
+        until = dt.datetime.strptime(str(h["until"])[:16], "%Y-%m-%d %H:%M").replace(tzinfo=tz)
+        if prev is not None and until <= prev:
+            raise ValueError("объект %s: history должен идти по возрастанию until" % obj["id"])
+        out.append((prev, until, parse_terms({"id": obj["id"], "terms": h.get("terms")})))
+        prev = until
+    out.append((prev, None, parse_terms(obj)))
     return out
 
 
@@ -30,14 +49,17 @@ def load(path=None):
     oids = [o["id"] for o in cfg["objects"]]
     if len(oids) != len(set(oids)):
         raise ValueError("в config.yaml повторяются id объектов")
-    for o in cfg["objects"]:
-        for pid, _ in parse_terms(o):
-            if pid not in ids:
-                raise ValueError("объект %s: нет точки %s" % (o["id"], pid))
-        if o.get("parent") and o["parent"] not in oids:
-            raise ValueError("объект %s: нет родителя %s" % (o["id"], o["parent"]))
     if not re.match(r"^[A-Za-z_/+-]+$", cfg["timezone"]):
         raise ValueError("странное имя часового пояса")
+    for o in cfg["objects"]:
+        for _, _, terms in periods(o, cfg["timezone"]):
+            for pid, _ in terms:
+                if pid not in ids:
+                    raise ValueError("объект %s: нет точки %s" % (o["id"], pid))
+        if not parse_terms(o):
+            raise ValueError("объект %s: пустой текущий состав terms" % o["id"])
+        if o.get("parent") and o["parent"] not in oids:
+            raise ValueError("объект %s: нет родителя %s" % (o["id"], o["parent"]))
     return cfg
 
 
