@@ -29,7 +29,9 @@ HELP = ("<b>Как пользоваться</b>\nНажмите «🏠 Меню�
         "⚡ Мощность — выберите объект(ы) и период: сейчас, 15 мин, 3 ч, 12 ч, 24 ч.\n"
         "🔋 Энергия — объект(ы) и период; ответ числом, затем можно открыть график нарастающим итогом "
         "или по часам/дням. «Свой период» — напишите даты, например 01.11–15.11.\n"
-        "🟢 Сводка сейчас — все объекты одним сообщением.\n\nКоманды: /menu, /power, /energy, /now, /report, /status, /id")
+        "🌗 Рабочее / нерабочее время — энергия по базе и каждому объекту: будни 08:00–19:00 по производственному "
+        "календарю РФ и остальное время (19:00–08:00, выходные, праздники).\n"
+        "🟢 Сводка сейчас — все объекты одним сообщением.\n\nКоманды: /menu, /power, /energy, /worktime, /now, /report, /status, /id")
 
 
 class Telegram:
@@ -212,6 +214,8 @@ class Bot:
                 view = d.handle(c, chat_id, "P:0", admin)
             elif text in ("/energy", "энергия") and admin:
                 view = d.handle(c, chat_id, "E:0", admin)
+            elif text in ("/worktime", "рабочее", "нерабочее") and admin:
+                view = d.handle(c, chat_id, "W", admin)
             elif text in ("/now", "сейчас"):
                 view = d.handle(c, chat_id, "S", admin)
             elif text in ("/report", "отчёт", "отчет"):
@@ -323,6 +327,7 @@ class Bot:
                 {"command": "menu", "description": "Меню"},
                 {"command": "power", "description": "Мощность: объект и период"},
                 {"command": "energy", "description": "Энергия: объект и период"},
+                {"command": "worktime", "description": "Энергия в рабочее и нерабочее время"},
                 {"command": "now", "description": "Сводка сейчас"},
                 {"command": "report", "description": "Отчёт по объектам"},
                 {"command": "status", "description": "Связь со счётчиками"},

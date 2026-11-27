@@ -13,13 +13,14 @@
   E:<mask>, Et, Ea, Ed   энергия: то же для объектов и периода
   Ep:<mask>:<код>        энергия: итог числом (код: today | yday | 7d | mon | pmon | cYYYYMMDD-YYYYMMDD | cust)
   Ev:<mask>:<код>:<вид>  энергия: график (вид: c — нарастающим, b — по часам/дням)
+  W, Wp:<код>            рабочее / нерабочее время: выбор периода и отчёт по всем объектам (коды как у Ep)
 """
 import datetime as dt
 import re
 from dataclasses import dataclass, field
 from zoneinfo import ZoneInfo
 
-from . import charts, query, report
+from . import charts, query, report, worktime
 from . import config as config_mod
 from .report import _fmt, kwh_rub, tariff_note
 
@@ -43,6 +44,7 @@ def btn(text, data):
 
 def menu_kb(admin, subscribed=False):
     rows = [[btn("⚡ Мощность", "P:0"), btn("🔋 Энергия", "E:0")] if admin else [btn("⚡ Мощность", "P:0")],
+            *([[btn("🌗 Рабочее / нерабочее время", "W")]] if admin else []),
             [btn("🟢 Сводка сейчас", "S")] + ([btn("🔌 Связь", "C")] if admin else []),
             [btn("🔕 Не получать вечерний отчёт" if subscribed else "🔔 Получать вечерний отчёт", "Sub")],
             [btn("ℹ️ О системе", "I")]]
@@ -105,7 +107,7 @@ class Dialog:
         self.objs = cfg["objects"]
         # «Все объекты» — верхний уровень без итога (нитки складов выбираются отдельно)
         self.all_mask = sum(1 << i for i, o in enumerate(self.objs) if not o.get("total") and not o.get("parent"))
-        self.pending = {}  # chat_id -> mask: ждём текст «свой период» для энергии
+        self.pending = {}  # chat_id -> mask (энергия) или "W" (рабочее/нерабочее): ждём текст «свой период»
 
     # ---------- общее ----------
     def selected(self, mask):
@@ -221,6 +223,11 @@ class Dialog:
         cap = "; ".join("%s %s" % (o["name"], kwh_rub(series[o["id"]][-1], self.cfg)) for o in objs if o["id"] in series)
         return View("photo", ("Итого за период: " + cap)[:1000], png=png, kb=kb)
 
+    def work_result(self, code):
+        start, end, label = query.energy_period(self.cfg, code)
+        kb = {"inline_keyboard": [[btn("🔄 Обновить", "Wp:" + code), btn("◀ Период", "W"), btn("🏠 Меню", "m")]]}
+        return View("text", worktime.text(self.conn, self.cfg, start, end, label), kb=kb)
+
     def custom_period(self, chat_id, text):
         """Текст «01.11–15.11» после кнопки «Свой период». Возвращает View или None, если ничего не ждали."""
         mask = self.pending.pop(chat_id, None)
@@ -242,6 +249,8 @@ class Dialog:
             return View("text", "Такой даты нет. Напишите период ещё раз, например: <code>01.11–15.11</code>.", kb=home_kb())
         if d2 < d1:
             d1, d2 = d2, d1
+        if mask == "W":
+            return self.work_result("c%s-%s" % (d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d")))
         return self.energy_result(mask, "c%s-%s" % (d1.strftime("%Y%m%d"), d2.strftime("%Y%m%d")))
 
     # ---------- разбор нажатия ----------
@@ -267,7 +276,7 @@ class Dialog:
             return View("text", info_text(self.cfg), kb=home_kb())
         if k == "C" and admin:
             return View("text", report.status_report(conn, self.cfg), kb=home_kb())
-        if k[0] == "E" and not admin:
+        if k[0] in ("E", "W") and not admin:
             return None
         if k in ("P", "E"):
             return self.pick(k, mask, "⚡ Мощность" if k == "P" else "🔋 Энергия")
@@ -290,6 +299,18 @@ class Dialog:
             return self.energy_result(mask, parts[2])
         if k == "Ev":
             return self.energy_result(mask, parts[2], parts[3])
+        if k == "W":
+            rows = [[btn(label, "Wp:" + code) for code, label in ENERGY_PERIODS[i:i + 3]] for i in (0, 3)]
+            rows.append([btn("🏠 Меню", "m")])
+            return View("text", "<b>🌗 Рабочее и нерабочее время</b>\nЭнергия по базе и по каждому объекту: рабочее время — "
+                                "будни по производственному календарю РФ с 08:00 до 19:00, нерабочее — с 19:00 до 08:00, "
+                                "выходные и праздники.\n\nЗа какой период?", kb={"inline_keyboard": rows})
+        if k == "Wp":
+            if parts[1] == "cust":
+                self.pending[chat_id] = "W"
+                return View("text", "<b>🌗 Рабочее и нерабочее — свой период</b>\nНапишите даты сообщением, например: "
+                                    "<code>01.11–15.11</code> или <code>01.11.2026–30.11.2026</code>.", kb=home_kb())
+            return self.work_result(parts[1])
         # старые кнопки из прежних версий
         if k == "now":
             return View("text", report.now_report(conn, self.cfg), kb=home_kb())

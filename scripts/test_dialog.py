@@ -20,7 +20,8 @@ codes = ["m", "S", "C", "P:0", "Pt:0:3", "Pa:0", "Pd:%d" % one,
          "Ep:%d:pmon" % one, "Ep:%d:cust" % one,
          "Ev:%d:today:c" % (ALL | tot), "Ev:%d:today:b" % (ALL | tot), "Ev:%d:7d:b" % two, "Ev:%d:mon:c" % one,
          "chart:3", "now", "energy", "I", "Sub", "m", "Sub", "m",
-         "Pp:%d:now" % sub, "Pp:%d:180" % sub, "Ep:%d:today" % sub, "Ev:%d:today:b" % (sub | ALL | tot), "Ev:%d:today:c" % sub]
+         "Pp:%d:now" % sub, "Pp:%d:180" % sub, "Ep:%d:today" % sub, "Ev:%d:today:b" % (sub | ALL | tot), "Ev:%d:today:c" % sub,
+         "W", "Wp:today", "Wp:yday", "Wp:7d", "Wp:mon", "Wp:pmon", "Wp:cust"]
 bad = 0
 for c in codes:
     t0 = time.time()
@@ -36,6 +37,10 @@ for c in codes:
     except Exception as e:  # noqa: BLE001
         bad += 1
         print("ERR %-22s %s: %s" % (c, type(e).__name__, e))
+v = d.custom_period(1, "24.11–26.11")
+print("OK  W custom 24.11–26.11 ", v.kind, v.text.replace("\n", " / ")[:160])
+print("--- полный текст «Рабочее / нерабочее» за 24.11–26.11:\n" + v.text)
+d.pending[1] = one
 v = d.custom_period(1, "20.11–23.11")
 print("OK  custom 20.11–23.11   ", v.kind, v.text.replace("\n", " / ")[:160])
 d.pending[1] = one
