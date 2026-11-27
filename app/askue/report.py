@@ -216,7 +216,7 @@ def morning_report(conn, cfg):
         if prev and d.get(y) is not None:
             med = statistics.median(prev)
             if med > 0.5:
-                cmp = " (обычно %s, %+.0f%%)" % (_fmt(med, 0, "кВт·ч"), (d[y] - med) / med * 100)
+                cmp = ", обычно %s, %+.0f%%" % (_fmt(med, 0, "кВт·ч"), (d[y] - med) / med * 100)
         name = "<b>%s</b>" % o["name"] if o.get("total") else _label(o, bold=False)
         lines.append("%s: %s%s" % (name, kwh_rub(d.get(y), cfg, 0), cmp))
     lines.append("")
