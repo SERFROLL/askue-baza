@@ -220,10 +220,37 @@ def morning_report(conn, cfg):
         name = "<b>%s</b>" % o["name"] if o.get("total") else _label(o, bold=False)
         lines.append("%s: %s%s" % (name, kwh_rub(d.get(y), cfg, 0), cmp))
     lines.append("")
+    lines += work_split_lines(conn, cfg, y)
+    lines.append("")
     lines.append(period_energy_text(conn, cfg, month_start(cfg), None, "С начала месяца"))
     if tariff_note(cfg):
         lines.append(tariff_note(cfg))
     return "\n".join(lines)
+
+
+def work_split_lines(conn, cfg, day):
+    """Строки утренней сводки: энергия за сутки day в рабочее и нерабочее время по каждому объекту."""
+    from . import worktime  # worktime сам импортирует report
+    tz = ZoneInfo(cfg["timezone"])
+    h1, h2 = cfg["reports"].get("work_time", ["08:00", "19:00"])
+    a = dt.datetime.combine(day, dt.time(0), tz)
+    energy, _, t0, _, missing = worktime.split(conn, cfg, a, a + dt.timedelta(days=1))
+    if t0 is None:
+        return ["<b>Рабочее / нерабочее время</b>: данных нет."]
+    off, _ = worktime.off_days(cfg, day, day)
+    if off:
+        return ["<b>Рабочее / нерабочее время</b>: %s — %s по производственному календарю, весь расход нерабочий." % (
+            day.strftime("%d.%m"), "выходной" if day.weekday() >= 5 else "праздничный день")]
+    lines = ["<b>Рабочее (%s–%s) / нерабочее время</b>, ☀️ / 🌙:" % (h1, h2)]
+    for o in cfg["objects"]:
+        e = energy.get(o["id"], {"work": 0.0, "off": 0.0})
+        s = e["work"] + e["off"]
+        share = ", нерабочее %d %%" % round(e["off"] / s * 100) if s > 0.05 else ""
+        name = "<b>%s</b>" % o["name"] if o.get("total") else _label(o, bold=False)
+        lines.append("%s: ☀️ %s · 🌙 %s%s" % (name, kwh_rub(e["work"], cfg, 0), kwh_rub(e["off"], cfg, 0), share))
+    if missing:
+        lines.append("⚠️ Для %s г. праздники в календаре не заданы." % ", ".join(map(str, missing)))
+    return lines
 
 
 def month_start(cfg, months_back=0):
