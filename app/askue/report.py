@@ -23,6 +23,24 @@ def _fmt(x, nd=1, unit=""):
     return s + (" " + unit if unit else "")
 
 
+def tariff(cfg):
+    return cfg.get("reports", {}).get("tariff_rub_per_kwh")
+
+
+def kwh_rub(x, cfg, nd=1):
+    """«123,4 кВт·ч (1 049 ₽)» — энергия и её стоимость по тарифу из config.yaml."""
+    s = _fmt(x, nd, "кВт·ч")
+    t = tariff(cfg)
+    if x is None or not t:
+        return s
+    return "%s (%s ₽)" % (s, "{:,.0f}".format(x * t).replace(",", " "))
+
+
+def tariff_note(cfg):
+    t = tariff(cfg)
+    return "Рубли — по тарифу %s ₽ за кВт·ч." % _fmt(t, 2).rstrip("0").rstrip(",") if t else None
+
+
 # ---------- данные по объектам ----------
 def now_power(conn, cfg):
     """Мощность «сейчас» по объектам: среднее за now_avg_s по 2-секундным данным, кВт. Плюс время последних данных."""
@@ -124,7 +142,7 @@ def evening_report(conn, cfg, title="Вечерний отчёт", full=True):
         kwh, since = energy.get(o["id"], (None, None))
         period = "с %s" % since.astimezone(tz).strftime("%H:%M") if since and since - midnight > dt.timedelta(minutes=15) else "за сегодня"
         line = "%s %s: сейчас %s, обычно ночью %s, %s %s. %s" % (
-            icon, _label(o), _fmt(now_kw, 1, "кВт"), _fmt(night.get(o["id"]), 1, "кВт"), period, _fmt(kwh, 0, "кВт·ч"), note)
+            icon, _label(o), _fmt(now_kw, 1, "кВт"), _fmt(night.get(o["id"]), 1, "кВт"), period, kwh_rub(kwh, cfg, 0), note)
         if icon in ("🔴", "🟠"):
             flagged.append(line)
         elif icon == "⚪":
@@ -141,7 +159,7 @@ def evening_report(conn, cfg, title="Вечерний отчёт", full=True):
         for o in tot:
             kwh, _ = energy.get(o["id"], (None, None))
             lines.append("")
-            lines.append("<b>%s</b>: сейчас %s, за сегодня %s." % (o["name"], _fmt(cur.get(o["id"]), 1, "кВт"), _fmt(kwh, 0, "кВт·ч")))
+            lines.append("<b>%s</b>: сейчас %s, за сегодня %s." % (o["name"], _fmt(cur.get(o["id"]), 1, "кВт"), kwh_rub(kwh, cfg, 0)))
     lines.append("")
     if flagged:
         lines.append("Требуют проверки: %d." % len(flagged))
@@ -152,6 +170,8 @@ def evening_report(conn, cfg, title="Вечерний отчёт", full=True):
         lines.append("Объекты, которые можно оценить, в норме. Без оценки: %d." % unknown)
     else:
         lines.append("Все объекты в норме.")
+    if full and tariff_note(cfg):
+        lines.append(tariff_note(cfg))
     return "\n".join(lines)
 
 
@@ -198,9 +218,11 @@ def morning_report(conn, cfg):
             if med > 0.5:
                 cmp = " (обычно %s, %+.0f%%)" % (_fmt(med, 0, "кВт·ч"), (d[y] - med) / med * 100)
         name = "<b>%s</b>" % o["name"] if o.get("total") else _label(o, bold=False)
-        lines.append("%s: %s%s" % (name, _fmt(d.get(y), 0, "кВт·ч"), cmp))
+        lines.append("%s: %s%s" % (name, kwh_rub(d.get(y), cfg, 0), cmp))
     lines.append("")
     lines.append(period_energy_text(conn, cfg, month_start(cfg), None, "С начала месяца"))
+    if tariff_note(cfg):
+        lines.append(tariff_note(cfg))
     return "\n".join(lines)
 
 
@@ -239,7 +261,7 @@ def period_energy_text(conn, cfg, start, end, title):
         return "%s: данных нет." % title
     lines = ["<b>%s</b>: данные с %s по %s" % (title, t0.astimezone(tz).strftime("%d.%m %H:%M"), t1.astimezone(tz).strftime("%d.%m %H:%M"))]
     for oid, name, is_total, kwh in objs:
-        lines.append(("<b>%s</b>: %s" if is_total else "%s: %s") % (name, _fmt(kwh, 1, "кВт·ч")))
+        lines.append(("<b>%s</b>: %s" if is_total else "%s: %s") % (name, kwh_rub(kwh, cfg)))
     return "\n".join(lines)
 
 
@@ -259,6 +281,8 @@ def energy_report(conn, cfg):
     lines.append("")
     lines.append("Для сверки с энергосбытом сравнивайте «Вся база» с коммерческим счётчиком за те же даты. "
                  "Данные собираются с 23.11.2026 15:09.")
+    if tariff_note(cfg):
+        lines.append(tariff_note(cfg))
     return "\n".join(lines)
 
 

@@ -21,7 +21,7 @@ from zoneinfo import ZoneInfo
 
 from . import charts, query, report
 from . import config as config_mod
-from .report import _fmt
+from .report import _fmt, kwh_rub, tariff_note
 
 POWER_PERIODS = [("now", "Сейчас"), ("15", "15 мин"), ("180", "3 ч"), ("720", "12 ч"), ("1440", "24 ч")]
 ENERGY_PERIODS = [("today", "Сегодня"), ("yday", "Вчера"), ("7d", "7 дней"),
@@ -195,15 +195,17 @@ class Dialog:
             lines = ["<b>🔋 Энергия, %s</b>" % label,
                      "Данные с %s по %s" % (t0.astimezone(tz).strftime("%d.%m %H:%M"), t1.astimezone(tz).strftime("%d.%m %H:%M")), ""]
             for o in objs:
-                lines.append(("<b>%s</b>: %s" if o.get("total") else "%s: %s") % (o["name"], _fmt(tot.get(o["id"]), 1, "кВт·ч")))
+                lines.append(("<b>%s</b>: %s" if o.get("total") else "%s: %s") % (o["name"], kwh_rub(tot.get(o["id"]), self.cfg)))
             parts = [o for o in config_mod.for_stack(objs, self.cfg) if o["id"] in tot]  # без двойного счёта ниток
             if len(parts) > 1:
-                lines.append("Сумма выбранных: %s" % _fmt(sum(tot[o["id"]] for o in parts), 1, "кВт·ч"))
+                lines.append("Сумма выбранных: %s" % kwh_rub(sum(tot[o["id"]] for o in parts), self.cfg))
             lines.append("")
             lines.append("<b>Показания счётчиков энергии, кВт·ч</b> (начало → конец):")
             names = {p["id"]: p["name"] for p in self.cfg["points"]}
             for pid, (e0, _, e1, _) in rd.items():
                 lines.append("%s: %s → %s" % (names.get(pid, pid), _fmt(e0, 1), _fmt(e1, 1)))
+            if tariff_note(self.cfg):
+                lines += ["", tariff_note(self.cfg)]
             return View("text", "\n".join(lines), kb=kb)
         span_days = (end - start).total_seconds() / 86400
         if view == "c":
@@ -216,7 +218,7 @@ class Dialog:
         what = "нарастающим итогом" if view == "c" else ("по часам" if step_min == 60 else "по дням")
         png = charts.chart_energy(self.cfg, objs, buckets, series, step_min, "cum" if view == "c" else "bars",
                                   "Энергия, %s — %s" % (label, what))
-        cap = "; ".join("%s %s" % (o["name"], _fmt(series[o["id"]][-1], 1, "кВт·ч")) for o in objs if o["id"] in series)
+        cap = "; ".join("%s %s" % (o["name"], kwh_rub(series[o["id"]][-1], self.cfg)) for o in objs if o["id"] in series)
         return View("photo", ("Итого за период: " + cap)[:1000], png=png, kb=kb)
 
     def custom_period(self, chat_id, text):
