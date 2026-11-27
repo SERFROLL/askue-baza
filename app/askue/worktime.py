@@ -86,9 +86,9 @@ def text(conn, cfg, start, end, label):
         lines.append("За этот период данных нет (сбор идёт с 23.11.2026 15:09).")
         return "\n".join(lines)
     hw, ho = hours.get("work", 0.0), hours.get("off", 0.0)
-    lines.insert(2, "Данные с %s по %s. Часов с данными: рабочих %s, нерабочих %s." % (
+    lines[2] = ("Данные с %s по %s. Часов с данными: рабочих %s, нерабочих %s." % (
         t0.astimezone(tz).strftime("%d.%m %H:%M"), t1.astimezone(tz).strftime("%d.%m %H:%M"),
-        _fmt(hw, 0), _fmt(ho, 0)))
+        _fmt(hw, 0), _fmt(ho, 0)))  # вместо пустой строки после заголовка: перед каждым объектом своя пустая
     for o in cfg["objects"]:
         e = energy.get(o["id"], {"work": 0.0, "off": 0.0})
         w, f = e["work"], e["off"]
